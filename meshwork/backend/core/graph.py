@@ -3,8 +3,7 @@ import matplotlib.pyplot as plt
 from networkx import DiGraph
 from pydantic import BaseModel, Field
 
-from task import Task
-
+from task import Task  # Ensure this import is correct for your setup
 
 class TaskGraph(BaseModel):
     graph: DiGraph = Field(default_factory=DiGraph)
@@ -18,27 +17,18 @@ class TaskGraph(BaseModel):
         for d in task.depends_on:
             self.graph.add_edge(d, task.id)
 
+    def get_task(self, task_id: str):
+        return self.graph.nodes[task_id]["task"]
+
+    def get_all_tasks(self):
+        return [self.graph.nodes[node]["task"] for node in self.graph.nodes]
+
     def visualize(self):
-        # pos = nx.nx_agraph.pygraphviz_layout(self.graph)
         pos = nx.kamada_kawai_layout(self.graph)
+        nx.draw(self.graph, pos=pos, with_labels=True, arrows=True)
+        plt.show()  # This line is crucial to display the figure
 
-        nx.draw(
-            self.graph,
-            pos,
-            with_labels=True,
-            node_color="lightblue",
-            node_size=500,
-            font_size=8,
-            arrows=True,
-        )
-        # edge_labels = nx.get_edge_attributes(self.graph, "utterances")
-        node_labels = nx.get_node_attributes(self.graph, "task")
-        nx.draw_networkx_labels(self.graph, pos, labels=node_labels, font_size=10)
-        plt.title(self.name)
-        plt.axis("off")
-        plt.show()
-
-
+# Example usage
 if __name__ == "__main__":
     TG = TaskGraph(name="MyTaskGraph")
     TG.add_task(

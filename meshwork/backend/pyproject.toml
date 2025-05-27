@@ -9,9 +9,8 @@ dependencies = [
     "matplotlib>=3.10.3",
     "networkx>=3.4.2",
     "pydantic>=2.11.5",
-    "pygraphviz>=1.14",
-    "pyqt5==5.15.10",
     "scipy>=1.15.3",
+    "uvicorn>=0.34.2",
 ]
 
 [tool.pyright]

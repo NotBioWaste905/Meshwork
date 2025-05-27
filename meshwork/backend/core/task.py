@@ -1,6 +1,5 @@
 import uuid
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +9,7 @@ class Status(Enum):
     IN_PROGRESS = 1
     DONE = 2
     REVIEW = 3
+    BLOCKED = 4
 
 
 class CompletionCondition(BaseModel):
@@ -32,4 +32,4 @@ class Task(BaseModel):
     status: Status = Field(default=Status.TODO)
     """Task status"""
     # completion_condition: Optional[CompletionCondition]
-    """Condition that need to be met for the task to be completed"""
+    # """Condition that need to be met for the task to be completed"""
