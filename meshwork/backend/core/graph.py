@@ -14,6 +14,7 @@ from task import Task, Status
 
 logger = logging.getLogger(__name__)
 
+
 class TaskGraph(BaseModel):
     """A directed graph representing tasks and their dependencies."""
 
@@ -30,7 +31,6 @@ class TaskGraph(BaseModel):
         if "backup_interval" in data:
             self.backup_interval = data["backup_interval"]
         schedule.every(self.backup_interval).seconds.do(self.backup_json)
-        schedule.run_pending()
 
     def add_task(self, task: Task):
         """Add a task to the graph."""
@@ -59,7 +59,9 @@ class TaskGraph(BaseModel):
         """
         for node in self.graph.nodes:
             task = self.graph.nodes[node]["task"]
-            if not all(self.get_task(dep).status == Status.DONE for dep in task.depends_on):
+            if not all(
+                self.get_task(dep).status == Status.DONE for dep in task.depends_on
+            ):
                 task.status = Status.BLOCKED
 
     def delete_task(self, task_id: str):
@@ -82,16 +84,17 @@ class TaskGraph(BaseModel):
         json_data = json_graph.node_link_data(self.graph)
 
         # Convert all Task objects to dicts and handle Status enum
-        for node in json_data['nodes']:
-            if 'task' in node:
-                task_dict = node['task'].dict()  # Convert Pydantic model to dict
-                task_dict['status'] = task_dict['status'].value  # Convert enum to value
-                node['task'] = task_dict
+        for node in json_data["nodes"]:
+            if "task" in node:
+                task_dict = node["task"].dict()  # Convert Pydantic model to dict
+                task_dict["status"] = task_dict["status"].value  # Convert enum to value
+                node["task"] = task_dict
 
         filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{self.name}_backup.json"
         with open(filename, "w") as f:
             json.dump(json_data, f, indent=4)
         logger.info(f"Backup created: {filename}")
+
 
 # Example usage
 if __name__ == "__main__":
