@@ -12,6 +12,11 @@ async def root():
     return {"message": "Hello World"}
 
 
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "meshwork-backend"}
+
+
 @app.post("/v0/task/add/")
 async def add_task(task: Task):
     TG.add_task(task)

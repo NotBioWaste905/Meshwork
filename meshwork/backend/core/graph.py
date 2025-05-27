@@ -10,7 +10,7 @@ from networkx.readwrite import json_graph
 from networkx import DiGraph
 from pydantic import BaseModel, Field
 
-from task import Task, Status
+from core.task import Task, Status
 
 logger = logging.getLogger(__name__)
 
