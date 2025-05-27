@@ -31,5 +31,5 @@ class Task(BaseModel):
     """Task tags"""
     status: Status = Field(default=Status.TODO)
     """Task status"""
-    completion_condition: Optional[CompletionCondition]
+    # completion_condition: Optional[CompletionCondition]
     """Condition that need to be met for the task to be completed"""
