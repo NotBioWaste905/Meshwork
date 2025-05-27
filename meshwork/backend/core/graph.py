@@ -63,6 +63,9 @@ class TaskGraph(BaseModel):
                 self.get_task(dep).status == Status.DONE for dep in task.depends_on
             ):
                 task.status = Status.BLOCKED
+            else:
+                if task.status == Status.BLOCKED:
+                    task.status = Status.TODO
 
     def delete_task(self, task_id: str):
         """Delete a task from the graph."""
