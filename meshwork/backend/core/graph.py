@@ -1,19 +1,36 @@
-import networkx as nx
+import json
+import datetime
+import logging
+import time
+
+import schedule
 import matplotlib.pyplot as plt
+import networkx as nx
+from networkx.readwrite import json_graph
 from networkx import DiGraph
 from pydantic import BaseModel, Field
 
-from core.task import Task, Status
+from task import Task, Status
 
+logger = logging.getLogger(__name__)
 
 class TaskGraph(BaseModel):
     """A directed graph representing tasks and their dependencies."""
 
     graph: DiGraph = Field(default_factory=DiGraph)
     name: str = Field(default_factory=str)
+    backup_interval: int = Field(default=10)
+    """Interval in seconds for automatic backup."""
 
     class Config:
         arbitrary_types_allowed = True
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if "backup_interval" in data:
+            self.backup_interval = data["backup_interval"]
+        schedule.every(self.backup_interval).seconds.do(self.backup_json)
+        schedule.run_pending()
 
     def add_task(self, task: Task):
         """Add a task to the graph."""
@@ -60,9 +77,25 @@ class TaskGraph(BaseModel):
         nx.draw(self.graph, pos=pos, with_labels=True, arrows=True)
         plt.show()  # This line is crucial to display the figure
 
+    def backup_json(self):
+        # Convert graph data to a serializable format
+        json_data = json_graph.node_link_data(self.graph)
+
+        # Convert all Task objects to dicts and handle Status enum
+        for node in json_data['nodes']:
+            if 'task' in node:
+                task_dict = node['task'].dict()  # Convert Pydantic model to dict
+                task_dict['status'] = task_dict['status'].value  # Convert enum to value
+                node['task'] = task_dict
+
+        filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{self.name}_backup.json"
+        with open(filename, "w") as f:
+            json.dump(json_data, f, indent=4)
+        logger.info(f"Backup created: {filename}")
 
 # Example usage
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)  # <-- Enable logging
     TG = TaskGraph(name="MyTaskGraph")
     TG.add_task(
         Task(
@@ -77,4 +110,7 @@ if __name__ == "__main__":
             depends_on=["123"],
         )
     )
-    TG.visualize()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
