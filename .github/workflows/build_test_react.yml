@@ -11,7 +11,7 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: ./meshwork/frontend
+    working-directory: ./meshwork/frontend/meshwork-ui
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
