@@ -11,7 +11,7 @@ on:
 defaults:
   run:
     shell: bash
-    working-directory: ./meshwork/frontend/meshwork-ui
+    working-directory: ./meshwork/frontend
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -21,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [10.x, 12.x, 14.x, 15.x]
+        node-version: [18.x, 20.x] # LTS and current versions
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
