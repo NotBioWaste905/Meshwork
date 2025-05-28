@@ -1,3 +1,4 @@
+node_modules
 # Python-generated files
 __pycache__/
 *.py[oc]

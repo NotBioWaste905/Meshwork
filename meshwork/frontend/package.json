@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@testing-library/dom": "^10.4.0",
     "cytoscape": "^3.2.19",
     "react": "^19.1.0",
     "react-cytoscapejs": "^2.0.0"
