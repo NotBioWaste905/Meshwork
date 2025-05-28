@@ -8,6 +8,11 @@ on:
   pull_request:
     branches: [main]
 
+defaults:
+  run:
+    shell: bash
+    working-directory: ./meshwork/frontend/meshwork-ui
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   build_test:
@@ -26,8 +31,6 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
-      - name: Go into frontend directory
-        run: cd meshwork/frontend/meshwork-ui
       - name: npm ci, build and test
         run: |
           npm ci
