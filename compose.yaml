@@ -1,0 +1,15 @@
+name: meshwork
+services:
+  backend:
+    build: ./meshwork/backend
+    ports:
+      - "8000:8000"
+  frontend:
+    build: ./meshwork/frontend/meshwork-ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+networks:
+  default:

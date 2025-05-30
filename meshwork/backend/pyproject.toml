@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi[standard]>=0.115.12",
+    "fastapi[all,standard]>=0.115.12",
     "matplotlib>=3.10.3",
     "networkx>=3.4.2",
     "pydantic>=2.11.5",
