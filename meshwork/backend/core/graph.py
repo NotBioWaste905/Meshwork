@@ -2,6 +2,7 @@ import json
 import datetime
 import logging
 import time
+import os
 
 import schedule
 import matplotlib.pyplot as plt
@@ -22,6 +23,7 @@ class TaskGraph(BaseModel):
     name: str = Field(default_factory=str)
     backup_interval: int = Field(default=10)
     """Interval in seconds for automatic backup."""
+    backup_folder: str = Field(default="backup")
 
     class Config:
         arbitrary_types_allowed = True
@@ -31,6 +33,10 @@ class TaskGraph(BaseModel):
         if "backup_interval" in data:
             self.backup_interval = data["backup_interval"]
         schedule.every(self.backup_interval).seconds.do(self.backup_json)
+
+    def load_backup(self):
+        # TODO: Implement loading the file with the most recent timestamp in filename
+        raise NotImplementedError("Backup loading is not implemented yet.")
 
     def add_task(self, task: Task):
         """Add a task to the graph."""
