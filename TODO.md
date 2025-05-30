@@ -1,0 +1,3 @@
+- [ ] docker backend endpoint
+- [ ] custom task-nodes
+- [ ] frontend and backend API connection
