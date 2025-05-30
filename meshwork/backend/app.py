@@ -32,14 +32,14 @@ async def add_task(task: Task):
     return {"message": f"Task {task.id} added"}
 
 
+@app.get("/v0/all_tasks")
+async def get_all_tasks() -> list[Task]:
+    return TG.get_all_tasks()
+
 @app.get("/v0/task/{task_id}")
 async def get_task(task_id: str) -> Task:
     return TG.get_task(task_id)
 
-
-@app.get("/v0/task/get_all")
-async def get_all_tasks() -> list[Task]:
-    return TG.get_all_tasks()
 
 
 @app.delete("/v0/task/{task_id}")

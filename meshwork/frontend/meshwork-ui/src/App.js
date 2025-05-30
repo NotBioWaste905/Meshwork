@@ -213,6 +213,11 @@ function App() {
         await taskApi.healthCheck();
         setBackendAvailable(true);
 
+        // insert sampleTasks tasks into database
+        for (const task of sampleTasks) {
+          await taskApi.createTask(task);
+        }
+
         // Backend is available, try to fetch tasks
         const fetchedTasks = await taskApi.getTasks();
 

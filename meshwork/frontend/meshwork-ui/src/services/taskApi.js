@@ -1,32 +1,32 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 class TaskApiService {
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
     const config = {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
     };
 
-    if (config.body && typeof config.body === 'object') {
+    if (config.body && typeof config.body === "object") {
       config.body = JSON.stringify(config.body);
     }
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
+
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
         return await response.json();
       }
-      
+
       return await response.text();
     } catch (error) {
       console.error(`API request failed: ${endpoint}`, error);
@@ -36,7 +36,7 @@ class TaskApiService {
 
   // Get all tasks
   async getTasks() {
-    return this.request('/v0/task/get_all');
+    return this.request("/v0/all_tasks");
   }
 
   // Get a specific task by ID
@@ -46,8 +46,8 @@ class TaskApiService {
 
   // Create a new task
   async createTask(taskData) {
-    return this.request('/v0/task/add/', {
-      method: 'POST',
+    return this.request("/v0/task/add/", {
+      method: "POST",
       body: taskData,
     });
   }
@@ -55,7 +55,7 @@ class TaskApiService {
   // Update an existing task
   async updateTask(taskId, taskData) {
     return this.request(`/v0/task/${taskId}`, {
-      method: 'PUT',
+      method: "PUT",
       body: taskData,
     });
   }
@@ -63,13 +63,13 @@ class TaskApiService {
   // Delete a task
   async deleteTask(taskId) {
     return this.request(`/v0/task/${taskId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
   // Health check
   async healthCheck() {
-    return this.request('/health');
+    return this.request("/health");
   }
 }
 

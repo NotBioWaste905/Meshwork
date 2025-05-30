@@ -52,9 +52,12 @@ class TaskGraph(BaseModel):
 
     def get_all_tasks(self):
         """Get all tasks from the graph."""
+        if not self.graph.nodes:
+            return []
         return [self.graph.nodes[node]["task"] for node in self.graph.nodes]
 
     def edit_task(self, task_id: str, new_task: Task):
+        # TODO: take only the necessary fields from new_task
         """Edit a task in the graph."""
         self.graph.nodes[task_id]["task"] = new_task
         self.set_blocked_tasks()
