@@ -3,6 +3,7 @@ import datetime
 import logging
 import time
 import os
+import uuid
 
 import schedule
 import matplotlib.pyplot as plt
@@ -33,6 +34,7 @@ class TaskGraph(BaseModel):
         if "backup_interval" in data:
             self.backup_interval = data["backup_interval"]
         schedule.every(self.backup_interval).seconds.do(self.backup_json)
+        self.id = uuid.uuid4().hex
 
     def load_backup(self):
         # TODO: Implement loading the file with the most recent timestamp in filename
