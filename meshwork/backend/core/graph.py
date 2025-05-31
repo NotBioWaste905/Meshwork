@@ -6,7 +6,6 @@ import os
 import uuid
 
 import schedule
-import matplotlib.pyplot as plt
 import networkx as nx
 from networkx.readwrite import json_graph
 from networkx import DiGraph
@@ -89,6 +88,7 @@ class TaskGraph(BaseModel):
         self.set_blocked_tasks()
 
     def visualize(self):
+        import matplotlib.pyplot as plt
         pos = nx.kamada_kawai_layout(self.graph)
         nx.draw(self.graph, pos=pos, with_labels=True, arrows=True)
         plt.show()  # This line is crucial to display the figure

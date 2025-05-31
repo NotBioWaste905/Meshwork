@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[all,standard]>=0.115.12",
-    "matplotlib>=3.10.3",
     "networkx>=3.4.2",
     "pydantic>=2.11.5",
     "schedule>=1.2.2",
@@ -17,3 +16,8 @@ dependencies = [
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.3",
+]
