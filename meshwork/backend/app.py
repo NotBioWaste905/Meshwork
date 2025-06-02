@@ -35,6 +35,12 @@ async def health():
     return {"status": "healthy", "service": "meshwork-backend"}
 
 
+@app.post("/v0/create_graph")
+async def create_graph():
+    new_graph = TaskGraph()
+    task_graphs[new_graph.id] = new_graph
+    return {"ID": new_graph.id}
+
 @app.post("/v0/{graph_id}/task/add/")
 async def add_task(graph_id: str, task: Task):
     task_graphs[graph_id].add_task(task)
@@ -48,7 +54,6 @@ async def get_all_tasks(graph_id: str) -> list[Task]:
 @app.get("/v0/{graph_id}/task/{task_id}")
 async def get_task(graph_id: str, task_id: str) -> Task:
     return task_graphs[graph_id].get_task(task_id)
-
 
 
 @app.delete("/v0/{graph_id}/task/{task_id}")

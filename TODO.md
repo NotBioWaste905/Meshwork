@@ -1,3 +1,5 @@
-- [ ] docker backend endpoint
-- [ ] custom task-nodes
-- [ ] frontend and backend API connection
+- [x] docker backend endpoint
+- [x] custom task-nodes
+- [x] frontend and backend API connection
+- [ ] node connection
+- [ ] task graph creation (multigraph support/auth)

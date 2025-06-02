@@ -2,7 +2,6 @@ import json
 import datetime
 import logging
 import time
-import os
 import uuid
 
 import schedule
@@ -19,6 +18,7 @@ logger = logging.getLogger(__name__)
 class TaskGraph(BaseModel):
     """A directed graph representing tasks and their dependencies."""
 
+    id: str = Field(default=uuid.uuid4().hex)
     graph: DiGraph = Field(default_factory=DiGraph)
     name: str = Field(default_factory=str)
     backup_interval: int = Field(default=10)
