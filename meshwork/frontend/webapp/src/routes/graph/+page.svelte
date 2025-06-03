@@ -6,6 +6,8 @@
 	import TaskNode from './TaskNode.svelte';
 	import { api } from '$lib/api';
 
+	import { Button } from 'flowbite-svelte';
+
 	const nodeTypes = {
 		task: TaskNode
 	};
@@ -74,7 +76,7 @@
 
 <div class="graph-container">
 	<div class="toolbar">
-		<button onclick={addNewTask} class="add-task-btn"> + Add Task </button>
+		<Button onclick={addNewTask} class="add-task-btn">+ Add Task</Button>
 		<span class="graph-id">Graph ID: {currentGraphId}</span>
 	</div>
 
