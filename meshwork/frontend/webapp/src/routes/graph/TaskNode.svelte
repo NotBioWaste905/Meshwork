@@ -73,13 +73,20 @@
 		</span>
 	</div>
 
-	{#if data.tags && data.tags.length > 0}
-		<div class="task-tags">
-			{#each data.tags as tag}
-				<span class="tag">{tag}</span>
+	<div class="task-details">
+		{#if data.tags && data.tags.length > 0}
+			<div class="task-tags">
+				{#each data.tags as tag}
+					<span class="tag">{tag}</span>
+				{/each}
+			</div>
+		{/if}
+		<div class="task-user">
+			{#each data.users as user}
+				<span class="user">{user}</span>
 			{/each}
 		</div>
-	{/if}
+	</div>
 </div>
 
 <style>
@@ -92,6 +99,19 @@
 		border-radius: 6px;
 		padding: 12px;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+
+	.task-user {
+		display: flex;
+		align-items: right;
+		margin-top: 8px;
+		width: 100%;
+	}
+
+	.task-user .user {
+		/* margin-right: 8px; */
+		font-size: 12px;
+		color: #6b7280;
 	}
 
 	.task-header {
