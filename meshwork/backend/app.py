@@ -1,5 +1,6 @@
 import logging
 
+from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,11 +37,15 @@ task_graphs = {
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class ConnectNodesRequest(BaseModel):
+    node_dependency: str
+    node_dependee: str
 
 @app.get("/")
 async def root():
@@ -83,3 +88,8 @@ async def delete_task(graph_id: str, task_id: str):
 async def edit_task(graph_id: str, task_id: str, new_task: Task):
     task_graphs[graph_id].edit_task(task_id, new_task)
     return {"message": f"Task {task_id} edited"}
+
+@app.post("/v0/{graph_id}/connect_nodes/")
+async def connect_nodes(graph_id: str, request: ConnectNodesRequest):
+    task_graphs[graph_id].connect_nodes(request.node_dependency, request.node_dependee)
+    return {"message": f"Nodes {request.node_dependency} and {request.node_dependee} connected"}

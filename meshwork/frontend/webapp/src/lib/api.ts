@@ -6,7 +6,15 @@ export interface Task {
 	depends_on: string[];
 	users: string[];
 	tags: string[];
-	status: 'TODO' | 'IN_PROGRESS' | 'DONE' | 'REVIEW' | 'BLOCKED';
+	status: Status;
+}
+
+export enum Status {
+	'TODO' = 0,
+	'IN_PROGRESS' = 1,
+	'DONE' = 2,
+	'REVIEW' = 3,
+	'BLOCKED' = 4
 }
 
 export interface TaskGraph {
@@ -65,6 +73,22 @@ export class MeshworkAPI {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(task)
+		});
+		return response.json();
+	}
+
+	async connectNodes(
+		graphId: string = EXAMPLE_GRAPH_ID,
+		source: string,
+		target: string
+	): Promise<{ message: string }> {
+		const response = await fetch(`${this.baseUrl}/v0/${graphId}/connect_nodes/`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				node_dependency: source,
+				node_dependee: target
+			})
 		});
 		return response.json();
 	}

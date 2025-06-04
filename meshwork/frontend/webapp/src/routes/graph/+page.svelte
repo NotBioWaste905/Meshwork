@@ -99,6 +99,12 @@
 		}
 	}
 
+	function onConnect(params) {
+		console.log('Connecting nodes:', params);
+		// send update to backend
+		api.connectNodes(currentGraphId, params.source, params.target);
+	}
+
 	// Handle node data updates
 	function onNodeChange(changes) {
 		// Handle node updates here if needed
@@ -113,7 +119,14 @@
 	</div>
 
 	<div class="flow-container">
-		<SvelteFlow bind:nodes {nodeTypes} bind:edges fitView onNodesChange={onNodeChange}>
+		<SvelteFlow
+			bind:nodes
+			{nodeTypes}
+			bind:edges
+			fitView
+			onNodesChange={onNodeChange}
+			onconnect={onConnect}
+		>
 			<Background />
 		</SvelteFlow>
 	</div>

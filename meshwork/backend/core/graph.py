@@ -59,10 +59,19 @@ class TaskGraph(BaseModel):
             return []
         return [self.graph.nodes[node]["task"] for node in self.graph.nodes]
 
-    def edit_task(self, task_id: str, new_task: Task):
+    def edit_task(self, task_id: str, fields: dict):
         # TODO: take only the necessary fields from new_task
         """Edit a task in the graph."""
-        self.graph.nodes[task_id]["task"] = new_task
+        for key, value in fields.items():
+            self.graph.nodes[task_id]["task"].key = value
+        self.set_blocked_tasks()
+
+    def connect_nodes(self, node_dependency: str, node_dependee: str):
+        """Connect two nodes in the graph."""
+        self.graph.add_edge(node_dependency, node_dependee)
+        self.graph.nodes[node_dependee]["task"].depends_on.append(node_dependency)
+        logger.info(f"Connected nodes {node_dependency} and {node_dependee}")
+
         self.set_blocked_tasks()
 
     def set_blocked_tasks(self):
