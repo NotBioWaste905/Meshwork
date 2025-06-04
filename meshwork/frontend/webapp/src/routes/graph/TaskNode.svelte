@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { useSvelteFlow, type NodeProps, Handle, Position } from '@xyflow/svelte';
 	import { type Task, Status } from '$lib/api';
+	import { Modal } from 'flowbite-svelte';
+	// import { transformWithEsbuild } from 'vite';
 
 	let { id, data }: NodeProps<Task> = $props();
 	let { updateNodeData } = useSvelteFlow();
@@ -9,6 +11,8 @@
 	let isEditing = $state(false);
 	let editName = $state(data.name || '');
 	let editDescription = $state(data.description || '');
+
+	let editModal = $state(false);
 
 	function toggleEdit() {
 		if (isEditing) {
@@ -53,7 +57,15 @@
 
 	<div class="task-header">
 		<h3 class="task-title">{data.name || 'Unnamed Task'}</h3>
-		<button class="edit-btn" onclick={toggleEdit}> ✎ </button>
+		<button class="edit-btn" onclick={() => (editModal = true)}> ✎ </button>
+		<Modal title="Edit the task" bind:open={editModal} autoclose>
+			<p class="text-base leading-relaxed text-gray-500 dark:text-gray-400">
+				{data.name}
+			</p>
+			<p class="text-base leading-relaxed text-gray-500 dark:text-gray-400">
+				{data.description}
+			</p>
+		</Modal>
 	</div>
 
 	{#if isEditing}
