@@ -8,17 +8,22 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Install poetry (isolated installation)
+ENV POETRY_HOME=/opt/poetry
+ENV POETRY_VERSION=2.1.0
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    cd /usr/local/bin && \
+    ln -s /opt/poetry/bin/poetry && \
+    poetry config virtualenvs.in-project true
 
 # Set working directory
 WORKDIR /app
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 
 # Install dependencies in a virtual environment
-RUN uv sync --frozen --no-cache --no-dev
+RUN poetry install --no-interaction --no-ansi --only main --no-root
 
 # Production stage
 FROM python:3.12-slim-bullseye
