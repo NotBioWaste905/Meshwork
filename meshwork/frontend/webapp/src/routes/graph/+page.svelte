@@ -1,5 +1,5 @@
 <script>
-	import { SvelteFlow, Background } from '@xyflow/svelte';
+	import { Background, SvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { onMount } from 'svelte';
 
@@ -39,7 +39,7 @@
 			const tasks = await api.getAllTasks(currentGraphId);
 			console.log('Loaded tasks:', tasks);
 			console.log('Number of tasks:', tasks.length);
-			tasks.forEach(task => {
+			tasks.forEach((task) => {
 				console.log(`Task ${task.id} (${task.name}): depends on`, task.depends_on);
 			});
 
@@ -47,13 +47,13 @@
 			nodes = tasks.map((task, index) => ({
 				id: task.id,
 				type: 'task',
-				position: { x: 100 + (index % 3) * 250, y: 100 + Math.floor(index / 3) * 150 },
+				position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
 				data: task
 			}));
 
 			// Create a set of all existing node IDs for validation
-			const nodeIds = new Set(tasks.map(task => task.id));
-		
+			const nodeIds = new Set(tasks.map((task) => task.id));
+
 			// Create edges array - ensure all referenced nodes exist
 			const newEdges = [];
 			for (const task of tasks) {
@@ -67,7 +67,12 @@
 							target: task.id
 						});
 					} else {
-						console.warn('Skipping edge: missing node', { dependency, taskId: task.id, hasSource: nodeIds.has(dependency), hasTarget: nodeIds.has(task.id) });
+						console.warn('Skipping edge: missing node', {
+							dependency,
+							taskId: task.id,
+							hasSource: nodeIds.has(dependency),
+							hasTarget: nodeIds.has(task.id)
+						});
 					}
 				}
 			}
