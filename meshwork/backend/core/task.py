@@ -33,3 +33,6 @@ class Task(BaseModel):
     """Task status"""
     # completion_condition: Optional[CompletionCondition]
     # """Condition that need to be met for the task to be completed"""
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.id = uuid.uuid4().hex

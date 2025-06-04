@@ -5,7 +5,7 @@ services:
     ports:
       - "8000:8000"
   frontend:
-    build: ./meshwork/frontend/meshwork-ui
+    build: ./meshwork/frontend/webapp
     ports:
       - "3000:3000"
     depends_on:

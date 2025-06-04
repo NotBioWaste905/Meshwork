@@ -42,8 +42,10 @@ class TaskGraph(BaseModel):
     def add_task(self, task: Task):
         """Add a task to the graph."""
         self.graph.add_node(task.id, task=task)
+        logger.info(f"Added task {task.id} to the graph")
         for d in task.depends_on:
             self.graph.add_edge(d, task.id)
+            logger.info(f"Added dependency {d} -> {task.id}")
 
         self.set_blocked_tasks()
 
@@ -57,11 +59,30 @@ class TaskGraph(BaseModel):
             return []
         return [self.graph.nodes[node]["task"] for node in self.graph.nodes]
 
-    def edit_task(self, task_id: str, new_task: Task):
+    def edit_task(self, task_id: str, fields: dict):
         # TODO: take only the necessary fields from new_task
         """Edit a task in the graph."""
-        self.graph.nodes[task_id]["task"] = new_task
+        for key, value in fields.items():
+            self.graph.nodes[task_id]["task"].key = value
         self.set_blocked_tasks()
+
+    def connect_nodes(self, node_dependency: str, node_dependee: str):
+        """Connect two nodes in the graph."""
+        self.graph.add_edge(node_dependency, node_dependee)
+        self.graph.nodes[node_dependee]["task"].depends_on.append(node_dependency)
+        logger.info(f"Connected nodes {node_dependency} and {node_dependee}")
+
+        self.set_blocked_tasks()
+
+
+    def disconnect_nodes(self, node_dependency: str, node_dependee: str):
+        """Disconnect two nodes in the graph."""
+        self.graph.remove_edge(node_dependency, node_dependee)
+        self.graph.nodes[node_dependee]["task"].depends_on.remove(node_dependency)
+        logger.info(f"Disconnected nodes {node_dependency} and {node_dependee}")
+
+        self.set_blocked_tasks()
+
 
     def set_blocked_tasks(self):
         """

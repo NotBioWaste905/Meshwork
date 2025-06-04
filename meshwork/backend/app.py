@@ -1,16 +1,34 @@
 import logging
 
+from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.task import Task
+from core.task import Task, Status
+from core.user import User
 from core.graph import TaskGraph
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def setup_examples() -> tuple[TaskGraph, User]:
+    """Initialize example tasks and users"""
+    example_graph = TaskGraph()
+    example_graph.id = "abc123"
+    user = User(id=123, name="John Doe", email="john@example.com", graphs=[example_graph.id])
+    task_1 = Task(name="Task 1", description="Description 1", status=Status.TODO)
+    logger.info(f"Created task {task_1.id}")
+    task_2 = Task(name="Task 2", description="Description 2", status=Status.TODO)
+    logger.info(f"Created task {task_2.id}")
+    task_3 = Task(name="Task 3", description="Description 3", status=Status.TODO, depends_on=[task_1.id, task_2.id])
+    logger.info(f"Created task {task_3.id}")
+    example_graph.add_task(task_1)
+    example_graph.add_task(task_2)
+    example_graph.add_task(task_3)
+    return example_graph, user
 
 app = FastAPI()
-TG = TaskGraph()
-logger = logging.getLogger(__name__)
+TG, user = setup_examples()
 logger.info(f"Initialized graph {TG.id}")
 task_graphs = {
     TG.id: TG
@@ -19,11 +37,15 @@ task_graphs = {
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React's default port
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class ConnectNodesRequest(BaseModel):
+    node_dependency: str
+    node_dependee: str
 
 @app.get("/")
 async def root():
@@ -66,3 +88,13 @@ async def delete_task(graph_id: str, task_id: str):
 async def edit_task(graph_id: str, task_id: str, new_task: Task):
     task_graphs[graph_id].edit_task(task_id, new_task)
     return {"message": f"Task {task_id} edited"}
+
+@app.post("/v0/{graph_id}/connect_nodes/")
+async def connect_nodes(graph_id: str, request: ConnectNodesRequest):
+    task_graphs[graph_id].connect_nodes(request.node_dependency, request.node_dependee)
+    return {"message": f"Nodes {request.node_dependency} and {request.node_dependee} connected"}
+
+@app.post("/v0/{graph_id}/disconnect_nodes/")
+async def disconnect_nodes(graph_id: str, request: ConnectNodesRequest):
+    task_graphs[graph_id].disconnect_nodes(request.node_dependency, request.node_dependee)
+    return {"message": f"Nodes {request.node_dependency} and {request.node_dependee} disconnected"}
