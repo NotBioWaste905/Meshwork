@@ -15,6 +15,7 @@ export interface TaskGraph {
 }
 
 const API_BASE_URL = 'http://localhost:8000'; // Adjust this to your FastAPI server port
+const EXAMPLE_GRAPH_ID = 'abc123';
 
 export class MeshworkAPI {
 	private baseUrl: string;
@@ -33,17 +34,20 @@ export class MeshworkAPI {
 	}
 
 	// Task operations
-	async getAllTasks(graphId: string): Promise<Task[]> {
+	async getAllTasks(graphId: string = EXAMPLE_GRAPH_ID): Promise<Task[]> {
 		const response = await fetch(`${this.baseUrl}/v0/${graphId}/all_tasks`);
 		return response.json();
 	}
 
-	async getTask(graphId: string, taskId: string): Promise<Task> {
+	async getTask(graphId: string = EXAMPLE_GRAPH_ID, taskId: string): Promise<Task> {
 		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`);
 		return response.json();
 	}
 
-	async addTask(graphId: string, task: Partial<Task>): Promise<{ message: string }> {
+	async addTask(
+		graphId: string = EXAMPLE_GRAPH_ID,
+		task: Partial<Task>
+	): Promise<{ message: string }> {
 		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/add/`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -52,7 +56,11 @@ export class MeshworkAPI {
 		return response.json();
 	}
 
-	async updateTask(graphId: string, taskId: string, task: Partial<Task>): Promise<{ message: string }> {
+	async updateTask(
+		graphId: string = EXAMPLE_GRAPH_ID,
+		taskId: string,
+		task: Partial<Task>
+	): Promise<{ message: string }> {
 		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
@@ -61,7 +69,10 @@ export class MeshworkAPI {
 		return response.json();
 	}
 
-	async deleteTask(graphId: string, taskId: string): Promise<{ message: string }> {
+	async deleteTask(
+		graphId: string = EXAMPLE_GRAPH_ID,
+		taskId: string
+	): Promise<{ message: string }> {
 		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`, {
 			method: 'DELETE'
 		});

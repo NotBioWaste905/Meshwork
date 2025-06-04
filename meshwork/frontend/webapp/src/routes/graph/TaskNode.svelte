@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { useSvelteFlow, type NodeProps } from '@xyflow/svelte';
+	import { useSvelteFlow, type NodeProps, Handle, Position } from '@xyflow/svelte';
 	import type { Task } from '$lib/api';
 
 	let { id, data }: NodeProps<Task> = $props();
@@ -45,6 +45,12 @@
 </script>
 
 <div class="task-node" style="border-left-color: {getStatusColor(data.status)}">
+	<!-- Input handle for incoming dependencies -->
+	<Handle type="target" position={Position.Left} />
+
+	<!-- Output handle for outgoing dependencies -->
+	<Handle type="source" position={Position.Right} />
+
 	<div class="task-header">
 		{#if isEditing}
 			<input bind:value={editName} class="task-title-input nodrag" placeholder="Task name" />
@@ -174,5 +180,27 @@
 		padding: 2px 6px;
 		border-radius: 8px;
 		font-size: 10px;
+	}
+
+	/* Handle styling */
+	:global(.svelte-flow__handle) {
+		width: 8px;
+		height: 8px;
+		background: #3b82f6;
+		border: 2px solid white;
+		border-radius: 50%;
+	}
+
+	:global(.svelte-flow__handle:hover) {
+		background: #2563eb;
+		transform: scale(1.2);
+	}
+
+	:global(.svelte-flow__handle.connectingfrom) {
+		background: #10b981;
+	}
+
+	:global(.svelte-flow__handle.connectingto) {
+		background: #f59e0b;
 	}
 </style>

@@ -6,14 +6,15 @@
 	import TaskNode from './TaskNode.svelte';
 	import { api } from '$lib/api';
 
-	import { Button } from 'flowbite-svelte';
+	import { Button, tablet } from 'flowbite-svelte';
 
 	const nodeTypes = {
 		task: TaskNode
 	};
 
 	let nodes = $state([]);
-	let currentGraphId = $state('');
+	let edges = $state([]);
+	let currentGraphId = $state('abc123');
 
 	// Initialize or get graph
 	onMount(async () => {
@@ -21,7 +22,7 @@
 			// For now, create a new graph each time
 			// In a real app, you'd probably want to save/load graph IDs
 			const response = await api.createGraph();
-			currentGraphId = response.ID;
+			// currentGraphId = response.ID;
 			console.log('Created graph:', currentGraphId);
 
 			// Load existing tasks
@@ -37,6 +38,10 @@
 		try {
 			const tasks = await api.getAllTasks(currentGraphId);
 			console.log('Loaded tasks:', tasks);
+			console.log('Number of tasks:', tasks.length);
+			tasks.forEach(task => {
+				console.log(`Task ${task.id} (${task.name}): depends on`, task.depends_on);
+			});
 
 			// Convert tasks to nodes
 			nodes = tasks.map((task, index) => ({
@@ -45,6 +50,29 @@
 				position: { x: 100 + (index % 3) * 250, y: 100 + Math.floor(index / 3) * 150 },
 				data: task
 			}));
+
+			// Create a set of all existing node IDs for validation
+			const nodeIds = new Set(tasks.map(task => task.id));
+		
+			// Create edges array - ensure all referenced nodes exist
+			const newEdges = [];
+			for (const task of tasks) {
+				for (let dependency of task.depends_on) {
+					// Only create edge if both source and target nodes exist
+					if (nodeIds.has(dependency) && nodeIds.has(task.id)) {
+						console.log('Creating edge from', dependency, 'to', task.id);
+						newEdges.push({
+							id: `edge-${dependency}-${task.id}`,
+							source: dependency,
+							target: task.id
+						});
+					} else {
+						console.warn('Skipping edge: missing node', { dependency, taskId: task.id, hasSource: nodeIds.has(dependency), hasTarget: nodeIds.has(task.id) });
+					}
+				}
+			}
+			edges = newEdges;
+			console.log('Created edges:', edges);
 		} catch (error) {
 			console.error('Failed to load tasks:', error);
 		}
@@ -56,8 +84,7 @@
 		try {
 			const newTask = {
 				name: 'New Task',
-				description: 'Click to edit this task',
-				status: 'TODO'
+				description: 'Click to edit this task'
 			};
 
 			await api.addTask(currentGraphId, newTask);
@@ -81,7 +108,7 @@
 	</div>
 
 	<div class="flow-container">
-		<SvelteFlow bind:nodes {nodeTypes} fitView onNodesChange={onNodeChange}>
+		<SvelteFlow bind:nodes {nodeTypes} bind:edges fitView onNodesChange={onNodeChange}>
 			<Background />
 		</SvelteFlow>
 	</div>

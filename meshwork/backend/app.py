@@ -3,14 +3,31 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.task import Task
+from core.task import Task, Status
+from core.user import User
 from core.graph import TaskGraph
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def setup_examples() -> tuple[TaskGraph, User]:
+    """Initialize example tasks and users"""
+    example_graph = TaskGraph()
+    example_graph.id = "abc123"
+    user = User(id=123, name="John Doe", email="john@example.com", graphs=[example_graph.id])
+    task_1 = Task(name="Task 1", description="Description 1", status=Status.TODO)
+    logger.info(f"Created task {task_1.id}")
+    task_2 = Task(name="Task 2", description="Description 2", status=Status.TODO)
+    logger.info(f"Created task {task_2.id}")
+    task_3 = Task(name="Task 3", description="Description 3", status=Status.TODO, depends_on=[task_1.id, task_2.id])
+    logger.info(f"Created task {task_3.id}")
+    example_graph.add_task(task_1)
+    example_graph.add_task(task_2)
+    example_graph.add_task(task_3)
+    return example_graph, user
 
 app = FastAPI()
-TG = TaskGraph()
-logger = logging.getLogger(__name__)
+TG, user = setup_examples()
 logger.info(f"Initialized graph {TG.id}")
 task_graphs = {
     TG.id: TG

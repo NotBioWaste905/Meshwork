@@ -42,8 +42,10 @@ class TaskGraph(BaseModel):
     def add_task(self, task: Task):
         """Add a task to the graph."""
         self.graph.add_node(task.id, task=task)
+        logger.info(f"Added task {task.id} to the graph")
         for d in task.depends_on:
             self.graph.add_edge(d, task.id)
+            logger.info(f"Added dependency {d} -> {task.id}")
 
         self.set_blocked_tasks()
 
