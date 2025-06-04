@@ -74,6 +74,16 @@ class TaskGraph(BaseModel):
 
         self.set_blocked_tasks()
 
+
+    def disconnect_nodes(self, node_dependency: str, node_dependee: str):
+        """Disconnect two nodes in the graph."""
+        self.graph.remove_edge(node_dependency, node_dependee)
+        self.graph.nodes[node_dependee]["task"].depends_on.remove(node_dependency)
+        logger.info(f"Disconnected nodes {node_dependency} and {node_dependee}")
+
+        self.set_blocked_tasks()
+
+
     def set_blocked_tasks(self):
         """
         Iterate over graph and set tasks as blocked if their dependencies are not DONE.

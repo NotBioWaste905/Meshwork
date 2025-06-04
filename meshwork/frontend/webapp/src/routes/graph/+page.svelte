@@ -105,6 +105,14 @@
 		api.connectNodes(currentGraphId, params.source, params.target);
 	}
 
+	function onDisconnect(params) {
+		console.log('Disconnecting nodes:', params);
+		// send update to backend
+		api.disconnectNodes(currentGraphId, params.edge.source, params.edge.target);
+		// Update edges array
+		edges = edges.filter((edge) => edge.id !== params.edge.id);
+	}
+
 	// Handle node data updates
 	function onNodeChange(changes) {
 		// Handle node updates here if needed
@@ -126,6 +134,7 @@
 			fitView
 			onNodesChange={onNodeChange}
 			onconnect={onConnect}
+			onedgeclick={onDisconnect}
 		>
 			<Background />
 		</SvelteFlow>

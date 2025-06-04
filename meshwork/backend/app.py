@@ -93,3 +93,8 @@ async def edit_task(graph_id: str, task_id: str, new_task: Task):
 async def connect_nodes(graph_id: str, request: ConnectNodesRequest):
     task_graphs[graph_id].connect_nodes(request.node_dependency, request.node_dependee)
     return {"message": f"Nodes {request.node_dependency} and {request.node_dependee} connected"}
+
+@app.post("/v0/{graph_id}/disconnect_nodes/")
+async def disconnect_nodes(graph_id: str, request: ConnectNodesRequest):
+    task_graphs[graph_id].disconnect_nodes(request.node_dependency, request.node_dependee)
+    return {"message": f"Nodes {request.node_dependency} and {request.node_dependee} disconnected"}

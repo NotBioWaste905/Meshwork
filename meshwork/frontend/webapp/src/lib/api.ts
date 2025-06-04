@@ -102,6 +102,22 @@ export class MeshworkAPI {
 		});
 		return response.json();
 	}
+
+	async disconnectNodes(
+		graphId: string = EXAMPLE_GRAPH_ID,
+		source: string,
+		target: string
+	): Promise<{ message: string }> {
+		const response = await fetch(`${this.baseUrl}/v0/${graphId}/disconnect_nodes/`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				node_dependency: source,
+				node_dependee: target
+			})
+		});
+		return response.json();
+	}
 }
 
 export const api = new MeshworkAPI();
