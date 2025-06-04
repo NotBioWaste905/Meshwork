@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { useSvelteFlow, type NodeProps, Handle, Position } from '@xyflow/svelte';
-	import type { Task } from '$lib/api';
+	import { type Task, Status } from '$lib/api';
 
 	let { id, data }: NodeProps<Task> = $props();
 	let { updateNodeData } = useSvelteFlow();
@@ -44,7 +44,7 @@
 	}
 </script>
 
-<div class="task-node" style="border-left-color: {getStatusColor(data.status)}">
+<div class="task-node" style="border-left-color: {getStatusColor(Status[data.status])}">
 	<!-- Input handle for incoming dependencies -->
 	<Handle type="target" position={Position.Left} />
 
@@ -52,14 +52,8 @@
 	<Handle type="source" position={Position.Right} />
 
 	<div class="task-header">
-		{#if isEditing}
-			<input bind:value={editName} class="task-title-input nodrag" placeholder="Task name" />
-		{:else}
-			<h3 class="task-title">{data.name || 'Unnamed Task'}</h3>
-		{/if}
-		<button class="edit-btn" onclick={toggleEdit}>
-			{isEditing ? '✓' : '✎'}
-		</button>
+		<h3 class="task-title">{data.name || 'Unnamed Task'}</h3>
+		<button class="edit-btn" onclick={toggleEdit}> ✎ </button>
 	</div>
 
 	{#if isEditing}
@@ -75,7 +69,7 @@
 
 	<div class="task-status">
 		<span class="status-badge" style="background-color: {getStatusColor(data.status)}">
-			{data.status}
+			{Status[data.status]}
 		</span>
 	</div>
 
