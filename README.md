@@ -1,6 +1,6 @@
 # Meshwork
 
-🕸🕸🕸
+## 🕸🕸🕸
 
 Meshwork is a project management system that represents tasks as a directed graph to ensure visibility of task blocking, dependencies, and bottlenecks. It supports heavy automation including GitHub Workflows integration, GitLab CI/CD, artifact-demanding tasks, and automated PR reviews.
 
