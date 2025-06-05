@@ -7,6 +7,7 @@ export interface Task {
 	users: string[];
 	tags: string[];
 	status: Status;
+	graphId?: string;
 }
 
 export enum Status {

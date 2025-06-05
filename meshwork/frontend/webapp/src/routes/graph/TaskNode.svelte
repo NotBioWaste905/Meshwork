@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { useSvelteFlow, type NodeProps, Handle, Position } from '@xyflow/svelte';
-	import { type Task, Status } from '$lib/api';
-	import { Modal } from 'flowbite-svelte';
+	import { type Task, Status, api } from '$lib/api';
+	import { Modal, Button } from 'flowbite-svelte';
 	// import { transformWithEsbuild } from 'vite';
 
 	let { id, data }: NodeProps<Task> = $props();
 	let { updateNodeData } = useSvelteFlow();
+
+	// Get graph ID from the data passed from parent
+	let currentGraphId = data.graphId || 'abc123';
 
 	// Local state for editing
 	let isEditing = $state(false);
@@ -13,6 +16,54 @@
 	let editDescription = $state(data.description || '');
 
 	let editModal = $state(false);
+	let isSaving = $state(false);
+	let errorMessage = $state('');
+
+	async function saveTask() {
+		if (isSaving) return;
+
+		isSaving = true;
+		errorMessage = '';
+
+		try {
+			// Prepare the updated task data
+			const updatedTask = {
+				...data,
+				name: data.name,
+				description: data.description,
+				tags:
+					typeof data.tags === 'string'
+						? data.tags
+								.split(',')
+								.map((t) => t.trim())
+								.filter((t) => t)
+						: data.tags,
+				users:
+					typeof data.users === 'string'
+						? data.users
+								.split(',')
+								.map((u) => u.trim())
+								.filter((u) => u)
+						: data.users
+			};
+
+			// Call the backend API
+			const response = await api.updateTask(currentGraphId, id, updatedTask);
+
+			// Update the node data in the flow
+			updateNodeData(id, updatedTask);
+
+			// Close the modal
+			editModal = false;
+
+			console.log('Task updated successfully:', response);
+		} catch (error) {
+			console.error('Failed to update task:', error);
+			errorMessage = 'Failed to save task. Please try again.';
+		} finally {
+			isSaving = false;
+		}
+	}
 
 	function toggleEdit() {
 		if (isEditing) {
@@ -59,12 +110,41 @@
 		<h3 class="task-title">{data.name || 'Unnamed Task'}</h3>
 		<button class="edit-btn" onclick={() => (editModal = true)}> ✎ </button>
 		<Modal title="Edit the task" bind:open={editModal} autoclose>
-			<p class="text-base leading-relaxed text-gray-500 dark:text-gray-400">
-				{data.name}
-			</p>
-			<p class="text-base leading-relaxed text-gray-500 dark:text-gray-400">
-				{data.description}
-			</p>
+			<form class="flex flex-col space-y-2" onsubmit={saveTask}>
+				{#if errorMessage}
+					<div class="alert alert-error rounded bg-red-100 p-2 text-sm text-red-700">
+						{errorMessage}
+					</div>
+				{/if}
+				<input
+					type="text"
+					placeholder="Task name"
+					class="input input-bordered w-full"
+					bind:value={data.name}
+					required
+				/>
+				<textarea
+					bind:value={data.description}
+					class="textarea textarea-bordered w-full"
+					placeholder="Task description"
+					rows="3"
+				></textarea>
+				<input
+					type="text"
+					placeholder="Tags (comma separated)"
+					class="input input-bordered w-full"
+					bind:value={data.tags}
+				/>
+				<input
+					type="text"
+					placeholder="Users (comma separated)"
+					class="input input-bordered w-full"
+					bind:value={data.users}
+				/>
+				<Button type="submit" class="w-full" disabled={isSaving}>
+					{isSaving ? 'Saving...' : 'Save'}
+				</Button>
+			</form>
 		</Modal>
 	</div>
 

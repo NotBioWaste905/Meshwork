@@ -48,7 +48,7 @@
 				id: task.id,
 				type: 'task',
 				position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
-				data: task
+				data: { ...task, graphId: currentGraphId }
 			}));
 
 			// Create a set of all existing node IDs for validation
@@ -117,6 +117,17 @@
 	function onNodeChange(changes) {
 		// Handle node updates here if needed
 		console.log('Node changes:', changes);
+	}
+
+	// Handle task updates from nodes
+	async function onTaskUpdate(taskId, updatedData) {
+		try {
+			await api.updateTask(currentGraphId, taskId, updatedData);
+			// Optionally reload tasks to ensure consistency
+			// await loadTasks();
+		} catch (error) {
+			console.error('Failed to update task:', error);
+		}
 	}
 </script>
 

@@ -31,6 +31,8 @@ class Task(BaseModel):
     """Task tags"""
     status: Status = Field(default=Status.TODO)
     """Task status"""
+    graph_id: str = Field(default="")
+    """Graph ID"""
     # completion_condition: Optional[CompletionCondition]
     # """Condition that need to be met for the task to be completed"""
     def __init__(self, **data):
