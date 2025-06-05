@@ -210,8 +210,8 @@
 
 	/* Handle styling */
 	:global(.svelte-flow__handle) {
-		width: 8px;
-		height: 8px;
+		width: 15px;
+		height: 15px;
 		background: #3b82f6;
 		border: 2px solid white;
 		border-radius: 50%;
@@ -219,7 +219,7 @@
 
 	:global(.svelte-flow__handle:hover) {
 		background: #2563eb;
-		transform: scale(1.2);
+		/* transform: scale(1.2); */
 	}
 
 	:global(.svelte-flow__handle.connectingfrom) {
