@@ -10,6 +10,7 @@ from networkx.readwrite import json_graph
 from networkx import DiGraph
 from pydantic import BaseModel, Field
 
+from core.db_handler import Neo4jHandler
 from core.task import Task, Status
 
 logger = logging.getLogger(__name__)
@@ -21,31 +22,49 @@ class TaskGraph(BaseModel):
     id: str = Field(default=uuid.uuid4().hex)
     graph: DiGraph = Field(default_factory=DiGraph)
     name: str = Field(default_factory=str)
-    backup_interval: int = Field(default=10)
-    """Interval in seconds for automatic backup."""
-    backup_folder: str = Field(default="backup")
+    db_handler: Neo4jHandler = Field(exclude=True)
 
     class Config:
         arbitrary_types_allowed = True
 
     def __init__(self, **data):
         super().__init__(**data)
-        if "backup_interval" in data:
-            self.backup_interval = data["backup_interval"]
-        schedule.every(self.backup_interval).seconds.do(self.backup_json)
-        self.id = uuid.uuid4().hex
-
-    def load_backup(self):
-        # TODO: Implement loading the file with the most recent timestamp in filename
-        raise NotImplementedError("Backup loading is not implemented yet.")
+        if not hasattr(self, "db_handler"):
+            self.db_handler = Neo4jHandler()
 
     def add_task(self, task: Task):
         """Add a task to the graph."""
-        self.graph.add_node(task.id, task=task)
-        logger.info(f"Added task {task.id} to the graph")
-        for d in task.depends_on:
-            self.graph.add_edge(d, task.id)
-            logger.info(f"Added dependency {d} -> {task.id}")
+        with self.db_handler.session() as session:
+            session.run(
+                """
+                MATCH (tg:TaskGraph {id: $graph_id})
+                CREATE (t:Task {id: $task_id,
+                                    name: $name,
+                                    description: $description,
+                                    status: $status,
+                                    tags: $tags,
+                                    users: $users,
+                                    created_at: datetime()})
+                CREATE (tg)-[:CONTAINS]->(t)
+                """,
+                graph_id=self.id,
+                task_id=task.id,
+                name=task.name,
+                description=task.description,
+                status=task.status,
+                tags=task.tags,
+                users=task.users,
+            )
+
+            for dependency in task.depends_on:
+                session.run(
+                    """
+                            MATCH (t1:Task {id: $task_id}), (t2:Task {id: $dep_id})
+                            CREATE (t1)-[:DEPENDS_ON]->(t2)
+                        """,
+                    task_id=task.id,
+                    dep_id=dependency,
+                )
 
         self.set_blocked_tasks()
 
@@ -73,7 +92,6 @@ class TaskGraph(BaseModel):
 
         self.set_blocked_tasks()
 
-
     def disconnect_nodes(self, node_dependency: str, node_dependee: str):
         """Disconnect two nodes in the graph."""
         self.graph.remove_edge(node_dependency, node_dependee)
@@ -82,20 +100,21 @@ class TaskGraph(BaseModel):
 
         self.set_blocked_tasks()
 
-
     def set_blocked_tasks(self):
         """
         Iterate over graph and set tasks as blocked if their dependencies are not DONE.
         """
-        for node in self.graph.nodes:
-            task = self.graph.nodes[node]["task"]
-            if not all(
-                self.get_task(dep).status == Status.DONE for dep in task.depends_on
-            ):
-                task.status = Status.BLOCKED
-            else:
-                if task.status == Status.BLOCKED:
-                    task.status = Status.TODO
+        # for node in self.graph.nodes:
+        #     task = self.graph.nodes[node]["task"]
+        #     if not all(
+        #         self.get_task(dep).status == Status.DONE for dep in task.depends_on
+        #     ):
+        #         task.status = Status.BLOCKED
+        #     else:
+        #         if task.status == Status.BLOCKED:
+        #             task.status = Status.TODO
+        with self.db_handler.session() as session:
+            pass
 
     def delete_task(self, task_id: str):
         """Delete a task from the graph."""
@@ -106,28 +125,6 @@ class TaskGraph(BaseModel):
             if task_id in task.depends_on:
                 task.depends_on.remove(task_id)
         self.set_blocked_tasks()
-
-    def visualize(self):
-        import matplotlib.pyplot as plt
-        pos = nx.kamada_kawai_layout(self.graph)
-        nx.draw(self.graph, pos=pos, with_labels=True, arrows=True)
-        plt.show()  # This line is crucial to display the figure
-
-    def backup_json(self):
-        # Convert graph data to a serializable format
-        json_data = json_graph.node_link_data(self.graph)
-
-        # Convert all Task objects to dicts and handle Status enum
-        for node in json_data["nodes"]:
-            if "task" in node:
-                task_dict = node["task"].dict()  # Convert Pydantic model to dict
-                task_dict["status"] = task_dict["status"].value  # Convert enum to value
-                node["task"] = task_dict
-
-        filename = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{self.name}_backup.json"
-        with open(filename, "w") as f:
-            json.dump(json_data, f, indent=4)
-        logger.info(f"Backup created: {filename}")
 
 
 # Example usage
