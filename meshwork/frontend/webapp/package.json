@@ -40,6 +40,7 @@
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
+		"@dagrejs/dagre": "^1.1.4",
 		"@xyflow/svelte": "^1.0.2",
 		"d3": "^7.9.0",
 		"lightningcss": "^1.30.1",

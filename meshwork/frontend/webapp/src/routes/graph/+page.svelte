@@ -1,12 +1,20 @@
 <script>
-	import { Background, SvelteFlow } from '@xyflow/svelte';
+	import {
+		SvelteFlowProvider,
+		Controls,
+		Background,
+		SvelteFlow,
+		useSvelteFlow,
+		Panel
+	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { onMount } from 'svelte';
+	import Dagre from '@dagrejs/dagre';
 
 	import TaskNode from './TaskNode.svelte';
 	import { api } from '$lib/api';
 
-	import { Button, tablet } from 'flowbite-svelte';
+	import { Button } from 'flowbite-svelte';
 
 	const nodeTypes = {
 		task: TaskNode
@@ -47,7 +55,7 @@
 			nodes = tasks.map((task, index) => ({
 				id: task.id,
 				type: 'task',
-				position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
+				// position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
 				data: { ...task, graphId: currentGraphId }
 			}));
 
@@ -129,6 +137,48 @@
 			console.error('Failed to update task:', error);
 		}
 	}
+	function getLayoutedElements(nodes, edges, options) {
+		const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+		g.setGraph({ rankdir: options.direction });
+
+		edges.forEach((edge) => g.setEdge(edge.source, edge.target));
+		nodes.forEach((node) =>
+			g.setNode(node.id, {
+				...node,
+				width: node.measured?.width ?? 0,
+				height: node.measured?.height ?? 0
+			})
+		);
+
+		Dagre.layout(g);
+
+		return {
+			nodes: nodes.map((node) => {
+				const position = g.node(node.id);
+				// We are shifting the dagre node position (anchor=center center) to the top left
+				// so it matches the Svelte Flow node anchor point (top left).
+				const x = position.x - (node.measured?.width ?? 0) / 2;
+				const y = position.y - (node.measured?.height ?? 0) / 2;
+
+				return {
+					...node,
+					position: { x, y },
+					sourcePosition: options.direction === 'LR' ? 'right' : 'bottom',
+					targetPosition: options.direction === 'LR' ? 'left' : 'top'
+				};
+			}),
+			edges
+		};
+	}
+
+	function onLayout(direction) {
+		const layouted = getLayoutedElements(nodes, edges, { direction });
+
+		nodes = [...layouted.nodes];
+		edges = [...layouted.edges];
+
+		fitView();
+	}
 </script>
 
 <div class="graph-container">
@@ -138,17 +188,23 @@
 	</div>
 
 	<div class="flow-container">
-		<SvelteFlow
-			bind:nodes
-			{nodeTypes}
-			bind:edges
-			fitView
-			onNodesChange={onNodeChange}
-			onconnect={onConnect}
-			onedgeclick={onDisconnect}
-		>
-			<Background />
-		</SvelteFlow>
+		<SvelteFlowProvider>
+			<SvelteFlow
+				bind:nodes
+				{nodeTypes}
+				bind:edges
+				fitView
+				onNodesChange={onNodeChange}
+				onconnect={onConnect}
+				onedgeclick={onDisconnect}
+			>
+				<Panel position="top-right">
+					<Button color="light" onclick={() => onLayout('LR')}>Sort</Button>
+					<Controls />
+				</Panel>
+				<Background />
+			</SvelteFlow>
+		</SvelteFlowProvider>
 	</div>
 </div>
 
