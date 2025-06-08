@@ -55,7 +55,7 @@
 			nodes = tasks.map((task, index) => ({
 				id: task.id,
 				type: 'task',
-				// position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
+				position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
 				data: { ...task, graphId: currentGraphId }
 			}));
 
@@ -183,10 +183,8 @@
 
 <div class="graph-container">
 	<div class="toolbar">
-		<Button onclick={addNewTask} class="add-task-btn">+ Add Task</Button>
 		<span class="graph-id">Graph ID: {currentGraphId}</span>
 	</div>
-
 	<div class="flow-container">
 		<SvelteFlowProvider>
 			<SvelteFlow
@@ -200,8 +198,9 @@
 			>
 				<Panel position="top-right">
 					<Button color="light" onclick={() => onLayout('LR')}>Sort</Button>
-					<Controls />
+					<Button onclick={addNewTask} class="add-task-btn">+ Add Task</Button>
 				</Panel>
+				<Controls />
 				<Background />
 			</SvelteFlow>
 		</SvelteFlowProvider>
@@ -220,7 +219,7 @@
 		background: #f9fafb;
 		border-bottom: 1px solid #e5e7eb;
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-end;
 		align-items: center;
 	}
 
