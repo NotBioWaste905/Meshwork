@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Status {
     TODO,
-    IN_PROGRESS,
+    InProgress,
     DONE,
     REVIEW,
-    BLOCKED
+    BLOCKED,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub id: String,
     pub name: String,
