@@ -13,3 +13,6 @@ wheels/
 .zed
 .ruff_cache
 .ropeproject
+
+# Rust
+target
