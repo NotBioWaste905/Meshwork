@@ -3,6 +3,6 @@
 - [x] frontend and backend API connection
 - [x] node connection
 - [x] task editing
-- [ ] task layout
+- [x] task layout
 - [ ] task graph creation (multigraph support/auth)
 - [ ] move to neo4j
