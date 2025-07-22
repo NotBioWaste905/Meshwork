@@ -39,5 +39,5 @@ jobs:
       #     key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo build
-        working-directory: Meshwork/meshwork/backend_rs
+        working-directory: meshwork/backend_rs
         run: cargo build
