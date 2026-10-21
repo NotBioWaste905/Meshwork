@@ -15,6 +15,7 @@ meshwork/backend_rs/         # Активный бэкенд: Rust, axum 0.6, fa
   src/main.rs                #   бутстрап: env, подключение к FalkorDB, запуск сервера
   src/lib.rs                 #   роутер (app()), CORS, HTTP-хендлеры
   src/db.rs                  #   все Cypher-запросы
+  src/frontier.rs            #   ready_tasks: чистая логика frontier, юнит-тесты
   src/schemas.rs             #   контракт API: Task, NewTask, TaskUpdate, Status
   src/error.rs               #   AppError -> HTTP-ответ
   tests/api.rs               #   интеграционные тесты против живой FalkorDB
@@ -73,6 +74,8 @@ CI: [.github/workflows/ci.yml](.github/workflows/ci.yml) — на push и PR
 читается через serde alias.
 
 API (`/v0/...`): `POST create_graph`; `GET :graph/all_tasks`;
+`GET :graph/ready_tasks[?unassigned_only=true]` (frontier: `TODO`, все
+зависимости `DONE`);
 `POST :graph/task/add/` (тело `NewTask`, обязательно только `name`, ответ —
 созданный `Task`, 201); `GET|PUT|DELETE :graph/task/:id` (PUT — частичный
 апдейт, списки заменяются целиком, лишние поля игнорируются);

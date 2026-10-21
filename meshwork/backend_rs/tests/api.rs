@@ -376,3 +376,63 @@ async fn dependency_cycles_are_rejected() {
     assert_eq!(status, StatusCode::OK);
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn ready_tasks_follow_dependencies() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let a = app.add_task(&graph_id, json!({ "name": "A" })).await;
+    let b = app
+        .add_task(&graph_id, json!({ "name": "B", "depends_on": [a.id] }))
+        .await;
+    let c = app
+        .add_task(&graph_id, json!({ "name": "C", "users": ["alice"] }))
+        .await;
+    let ready = |unassigned_only: bool| {
+        let uri = format!("/v0/{graph_id}/ready_tasks?unassigned_only={unassigned_only}");
+        let app = &app;
+        async move {
+            let (status, body) = app.call(Method::GET, &uri, None).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            let mut ids: Vec<String> = serde_json::from_value::<Vec<Task>>(body)
+                .unwrap()
+                .into_iter()
+                .map(|t| t.id)
+                .collect();
+            ids.sort();
+            ids
+        }
+    };
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+
+    assert_eq!(ready(false).await, sorted(vec![a.id.clone(), c.id.clone()]));
+    assert_eq!(ready(true).await, vec![a.id.clone()]);
+
+    // Finishing A unblocks B; A itself is no longer TODO.
+    app.call(
+        Method::PUT,
+        &format!("/v0/{graph_id}/task/{}", a.id),
+        Some(json!({ "status": "DONE" })),
+    )
+    .await;
+    assert_eq!(ready(true).await, vec![b.id.clone()]);
+
+    // The flag is optional.
+    let (status, _) = app
+        .call(Method::GET, &format!("/v0/{graph_id}/ready_tasks"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &format!("/v0/{}/ready_tasks", uuid::Uuid::new_v4()),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    app.cleanup().await;
+}

@@ -69,6 +69,11 @@ export class MeshworkAPI {
 		return this.request('GET', `/v0/${graphId}/all_tasks`);
 	}
 
+	/** The frontier: TODO tasks whose dependencies are all DONE. */
+	getReadyTasks(graphId: string, unassignedOnly = false): Promise<Task[]> {
+		return this.request('GET', `/v0/${graphId}/ready_tasks?unassigned_only=${unassignedOnly}`);
+	}
+
 	getTask(graphId: string, taskId: string): Promise<Task> {
 		return this.request('GET', `/v0/${graphId}/task/${taskId}`);
 	}
