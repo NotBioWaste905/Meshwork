@@ -1,126 +1,110 @@
 # Meshwork
 
-Таск-трекер, где задачи — ноды графа, а зависимости видны по умолчанию.
-Продуктовое видение — [MISSION.md](MISSION.md), архитектура (C4) —
-[docs/architecture.md](docs/architecture.md), бэклог — [TODO.md](TODO.md).
-Перед изменением модели данных (типы нод/рёбер, статусы) сверяйся с
-MISSION.md § «Идея графа»: там зафиксированы `BLOCKS` / `PART_OF` /
-`AFFECTS`, `CHORE`-ноды и отказ от ИЛИ-зависимостей.
+Task tracker where tasks are graph nodes and dependencies are visible by default.
+Product vision: [MISSION.md](MISSION.md); architecture (C4): [docs/architecture.md](docs/architecture.md);
+MVP plan and backlog: [TODO.md](TODO.md). Before changing the data model (node/edge types,
+statuses) check MISSION.md § «Идея графа»: it fixes `BLOCKS` / `PART_OF` / `AFFECTS`,
+`CHORE` nodes and no OR-dependencies.
 
-## Структура
+## Layout
 
 ```
 compose.yaml                 # backend + frontend + falkordb
 scripts/                     # backup-falkordb.sh, restore-falkordb.sh
-meshwork/backend_rs/         # Активный бэкенд: Rust, axum 0.6, falkordb crate
-  src/main.rs                #   бутстрап: env, подключение к FalkorDB, запуск сервера
-  src/lib.rs                 #   роутер (app()), CORS, HTTP-хендлеры
-  src/db.rs                  #   все Cypher-запросы
-  src/frontier.rs            #   ready_tasks: чистая логика frontier, юнит-тесты
-  src/schemas.rs             #   контракт API: Task, NewTask, TaskUpdate, Status
-  src/error.rs               #   AppError -> HTTP-ответ
-  tests/api.rs               #   интеграционные тесты против живой FalkorDB
+meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
+  src/main.rs                #   bootstrap: env, FalkorDB connection, server
+  src/lib.rs                 #   router (app()), CORS, HTTP handlers
+  src/db.rs                  #   all Cypher queries
+  src/frontier.rs            #   ready_tasks: pure frontier logic + unit tests
+  src/schemas.rs             #   API contract: Task, NewTask, TaskUpdate, Status
+  src/error.rs               #   AppError -> HTTP response
+  tests/api.rs               #   integration tests against a live FalkorDB
 meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre
-  src/lib/api.ts             #   единственный HTTP-клиент к бэкенду, зеркало schemas.rs
-  src/lib/graphStore.svelte.ts #  задачи открытого графа, общие для всех экранов графа
-  src/routes/graphs/         #   список графов (известных этому браузеру, localStorage) и new/: создание
-  src/routes/graph/          #   +page.svelte: редирект на последний/новый граф
-                             #   [id]/+page.svelte: граф-вью; TaskNode.svelte: нода и модалка редактирования
+  src/lib/api.ts             #   the only HTTP client, mirrors schemas.rs
+  src/lib/graphStore.svelte.ts #  tasks of the open graph, shared by all graph screens
+  src/routes/graphs/         #   graph list (known to this browser, localStorage); new/: create
+  src/routes/graph/          #   +page.svelte: redirect to last/new graph
+                             #   [id]/: graph view, board/, table/, task/[taskId]/
 ```
 
-## Команды
+## Commands
 
 ```bash
-# Всё вместе
 docker compose up -d --build        # frontend :3000, backend :8000, FalkorDB :6379, FalkorDB UI :3001
 
-# Бэкенд локально (нужна FalkorDB: docker compose up -d falkordb)
+# backend (needs FalkorDB: docker compose up -d falkordb)
 cd meshwork/backend_rs
 FALKORDB_URL=falkor://localhost:6379 cargo run
-cargo clippy --all-targets && cargo fmt
-cargo test -- --ignored             # интеграционные тесты, нужна FalkorDB на localhost:6379
+cargo clippy --all-targets -- -D warnings && cargo fmt
+cargo test -- --include-ignored     # integration tests need FalkorDB on localhost:6379
 
-# Фронтенд
+# frontend
 cd meshwork/frontend/webapp
-npm ci && npm run dev               # :5173; бэкенд разрешает CORS с :3000 и :5173
-npm run check      # svelte-check / TS
-npm run lint       # prettier --check + eslint
+npm ci && npm run dev               # :5173; backend allows CORS from :3000 and :5173
+npm run check                       # svelte-check / TS
+npm run lint                        # prettier --check + eslint
 npm run format
 ```
 
-Переменные бэкенда: `FALKORDB_URL` (default `falkor://falkordb:6379`),
-`FALKORDB_GRAPH` (default `meshwork`), `CORS_ALLOW_ORIGINS` (через запятую
-или `*`, default `http://localhost:3000,http://localhost:5173`). Все
-пользовательские «графы» живут в одном FalkorDB-графе и различаются нодой
-`(:Graph {id})`; тесты создают отдельный FalkorDB-граф `test_<uuid>` и удаляют его.
+Backend env: `FALKORDB_URL` (default `falkor://falkordb:6379`), `FALKORDB_GRAPH` (default
+`meshwork`), `CORS_ALLOW_ORIGINS` (comma-separated or `*`, default
+`http://localhost:3000,http://localhost:5173`). All user graphs live in one FalkorDB graph,
+told apart by a `(:Graph {id})` node; tests use a throwaway FalkorDB graph `test_<uuid>`.
 
-Фронт: `VITE_API_URL` (build-time, default `http://localhost:8000`), см. `.env.example`.
+Frontend: `VITE_API_URL` (build time, default `http://localhost:8000`), see `.env.example`.
 
-CI: [.github/workflows/ci.yml](.github/workflows/ci.yml) — на push и PR
-в `main`/`dev`. Бэкенд: `cargo fmt --check`, `clippy -D warnings`,
-интеграционные тесты против FalkorDB в service-контейнере. Фронт:
-`npm run check`, `npm run lint`, `npm run build`. Версия FalkorDB
-запинена в двух местах — `compose.yaml` и `ci.yml`, держи их одинаковыми.
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)), on push and PR to `main`/`dev`:
+backend `cargo fmt --check`, `clippy -D warnings`, integration tests against a FalkorDB
+service container; frontend `npm run check`, `lint`, `build`. The FalkorDB version is pinned
+in both `compose.yaml` and `ci.yml` — keep them equal.
 
-## Модель в БД (как сейчас в коде)
+## Data model (as in code)
 
 ```
 (:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph {id})
-(:Task)-[:DEPENDS_ON]->(:Task)      # t зависит от dep
+(:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:User {id})
 ```
 
-`status` хранится той же строкой, что ходит по API: `TODO`, `IN_PROGRESS`,
-`DONE`, `REVIEW`, `BLOCKED` (`Status::as_str`). Старое `InProgress`
-читается через serde alias.
+`status` is stored as the API string: `TODO`, `IN_PROGRESS`, `DONE`, `REVIEW`, `BLOCKED`
+(`Status::as_str`); legacy `InProgress` is read via a serde alias.
 
-API (`/v0/...`): `POST create_graph`; `GET :graph/all_tasks`;
-`GET :graph/ready_tasks[?unassigned_only=true]` (frontier: `TODO`, все
-зависимости `DONE`);
-`POST :graph/task/add/` (тело `NewTask`, обязательно только `name`, ответ —
-созданный `Task`, 201); `GET|PUT|DELETE :graph/task/:id` (PUT — частичный
-апдейт, списки заменяются целиком, лишние поля игнорируются);
-`POST :graph/connect_nodes/` и `disconnect_nodes/` с
-`{node_dependency, node_dependee}` — dependency блокирует dependee, на
-канвасе ребро идёт dependency → dependee. Ошибки — `{message}` с 400/404/500;
-409 — если новая зависимость замкнула бы цикл `DEPENDS_ON` (граф
-зависимостей всегда DAG).
+`DEPENDS_ON` is the blocking edge MISSION.md calls `BLOCKS`: `(a)-[:DEPENDS_ON]->(b)` means
+"b blocks a". Keep the name `DEPENDS_ON`, do not rename it.
 
-`DEPENDS_ON` — это и есть блокирующее ребро, которое MISSION.md называет
-`BLOCKS`: `(a)-[:DEPENDS_ON]->(b)` означает «b блокирует a». Имя в коде
-остаётся `DEPENDS_ON`, переименовывать не нужно.
+API (`/v0/...`):
+- `POST create_graph`; `GET :graph/all_tasks`
+- `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`
+- `POST :graph/task/add/` — body `NewTask`, only `name` required; returns the created `Task`, 201
+- `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored
+- `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
+  dependency blocks dependee; on the canvas the edge goes dependency → dependee
+- Errors are `{message}` with 400/404/500; 409 when a new dependency would close a
+  `DEPENDS_ON` cycle (the dependency graph is always a DAG).
 
-## Нюансы и грабли
+## Gotchas
 
-- **Данные FalkorDB** — в томе `meshwork_falkordb_data`, с AOF (журнал).
-  Бэкап/восстановление — `scripts/backup-falkordb.sh` и
-  `scripts/restore-falkordb.sh`, подробности в [docs/operations.md](docs/operations.md).
-  Никогда не запускай `docker compose down -v` и не включай AOF на томе,
-  где есть только `dump.rdb`: Redis поднимет пустую базу.
-- **FalkorDB, не Neo4j.** Переезд
-  Neo4j → FalkorDB сделан. Cypher почти тот же, но драйвер — `falkordb`
-  (Redis-протокол), транзакций на несколько запросов нет: каждый
-  `query()` атомарен сам по себе, хендлер целиком — нет.
-- Параметры запросов только через `.with_param(s)`, никогда не
-  форматировать значения в строку Cypher.
-- Хендлеры с несколькими запросами сначала валидируют (граф/задачи
-  существуют), потом пишут — чтобы отклонённый запрос не оставлял
-  полузаписанного состояния. Держи этот порядок.
-- `#![recursion_limit = "256"]` в `lib.rs` нужен: на свежем rustc
-  async-футуры falkordb не влезают в дефолтный лимит.
-- Если `npm ci` получает 404 — глобальный npm-конфиг может смотреть в
-  корпоративный реестр; `package-lock.json` ссылается на
-  `registry.npmjs.org`, ставь с `--registry=https://registry.npmjs.org`.
-- Фронт: Svelte 5 runes (`$state`, `$props`), не Svelte 4-синтаксис.
-  Отступы — табы (prettier).
+- **FalkorDB data** lives in the `meshwork_falkordb_data` volume with AOF on. Backup/restore:
+  `scripts/backup-falkordb.sh`, `scripts/restore-falkordb.sh`, see
+  [docs/operations.md](docs/operations.md). Never run `docker compose down -v`, and never turn
+  AOF on for a volume that only has `dump.rdb`: Redis loads an empty dataset.
+- **FalkorDB, not Neo4j.** Cypher is nearly the same, the driver is `falkordb` (Redis protocol).
+  No multi-query transactions: each `query()` is atomic, a handler as a whole is not.
+- Query values only via `.with_param(s)`; never format values into a Cypher string.
+- Handlers that run several queries validate first (graph/tasks exist), then write, so a
+  rejected request leaves no partial state. Keep that order.
+- `#![recursion_limit = "256"]` in `lib.rs` is required: on recent rustc the falkordb async
+  futures exceed the default limit.
+- `npm ci` 404s → the global npm config may point at a corporate registry; the lockfile uses
+  `registry.npmjs.org`, so pass `--registry=https://registry.npmjs.org`.
+- Frontend: Svelte 5 runes (`$state`, `$props`), not Svelte 4 syntax. Tabs (prettier).
 
-## Конвенции
+## Conventions
 
-- Ветки: `main` — стабильная, `dev` — интеграционная. Каждая задача из
-  TODO.md — короткая ветка от `dev` (`feat/…`, `fix/…`, `ci/…`, `docs/…`),
-  вливается PR-ом в `dev` после зелёного CI. `dev` → `main` — когда набралось
-  законченное (например, веха M0–M4 из TODO.md). Отмечай сделанное в TODO.md в той же ветке.
-- Сообщения коммитов — короткие, на английском, в повелительном
-  наклонении (`Add …`, `Fix …`).
-- Документация проекта (MISSION, architecture, TODO) — на русском.
-- При значимых изменениях архитектуры обновляй docs/architecture.md.
+- Branches: `main` is stable, `dev` is the integration branch. Each TODO.md task gets a short
+  branch from `dev` (`feat/…`, `fix/…`, `ci/…`, `docs/…`), merged into `dev` by PR after green
+  CI. `dev` → `main` when a milestone (M0–M4 in TODO.md) is complete. Tick TODO.md items in
+  the same branch.
+- Commit messages: short, English, imperative (`Add …`, `Fix …`).
+- CLAUDE.md files are in English; product docs (MISSION, architecture, TODO, operations) are in Russian.
+- Update docs/architecture.md on significant architecture changes.
