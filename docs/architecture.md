@@ -38,14 +38,12 @@ C4Container
     System_Boundary(meshwork, "Meshwork") {
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
         Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей")
-        Container(backend_legacy, "Legacy Backend", "Python, FastAPI, networkx (in-memory)", "Прежняя реализация, источник миграции логики, не в проде")
         ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/User, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")
     Rel(frontend, backend, "REST /v0/...", "JSON over HTTP :8000")
     Rel(backend, db, "Redis protocol", "falkordb crate (async)")
-    Rel(backend_legacy, db, "не подключен", "референс-код")
 ```
 
 ## Level 2 — Containers (целевое, по MISSION.md)
@@ -87,7 +85,3 @@ C4Container
 - **Кастомные поля**: отложено см. [MISSION.md § Открытые вопросы](../MISSION.md).
   Если решится в пользу произвольных полей — вероятно, `FieldDefinition`
   ноды на уровне проекта (см. обсуждение), без отдельной document DB.
-- **Legacy Python backend** (`meshwork/backend/`): статус миграции неясен
-  — рассматривать как источник для переноса логики или выпилить, когда
-  Rust-бэкенд догонит функциональность (`create_graph`/`add_task`/`get_all_tasks`
-  уже есть, плюс CRUD задач и connect/disconnect; Python-бэкенд больше ничего не умеет сверх этого).

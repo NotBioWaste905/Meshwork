@@ -80,7 +80,7 @@
 
 ## Гигиена репо
 
-- [ ] Удалить `meshwork/backend/` (legacy Python), когда Rust догонит функциональность; до тех пор — не трогать
+- [x] Удалить `meshwork/backend/` (legacy Python): Rust-бэкенд умеет всё, что умел он
 - [x] README: стек, запуск, API, процесс работы с ветками
 - [x] CI: `dtolnay/rust-toolchain`, `checkout@v4`, fmt/clippy, `rust-cache`, запуск на `main`/`dev` и PR в них
 - [x] CI для фронта: check, lint, build
@@ -88,6 +88,6 @@
 - [ ] Rust Dockerfile: multi-stage; `node:19` → LTS
 - [ ] Апгрейд axum 0.6 → 0.8 (+ tower-http 0.6)
 - [ ] Удалить неиспользуемые страницы-заглушки фронта (`pricing`, `contact`, `account`) или пометить как TODO
-- [ ] `.zed/` в `.gitignore`, но `.zed/settings.json` закоммичен — выбрать одно
+- [x] `.zed/` только в `.gitignore` (`settings.json` был только для Python, удалён)
 - [x] Фронт: неиспользуемый CSS в графе (3 warning svelte-check)
 - [ ] Позиции нод не сохраняются — после перезагрузки раскладка сбрасывается

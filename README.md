@@ -116,7 +116,6 @@ A task looks like this:
 ```
 meshwork/backend_rs/        Rust backend (the active one)
 meshwork/frontend/webapp/   SvelteKit web app
-meshwork/backend/           Legacy Python backend, kept as reference only
 docs/architecture.md        C4 diagrams
 docs/design/                Screen designs the UI follows
 MISSION.md                  Product idea

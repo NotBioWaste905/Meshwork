@@ -23,8 +23,6 @@ meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyfl
   src/lib/api.ts             #   единственный HTTP-клиент к бэкенду, зеркало schemas.rs
   src/routes/graph/          #   +page.svelte: редирект на последний/новый граф
                              #   [id]/+page.svelte: граф-вью; TaskNode.svelte: нода и модалка редактирования
-meshwork/backend/            # LEGACY: Python/FastAPI, in-memory граф + networkx. Не запускается в compose.
-                             #   Только как референс логики при переносе в Rust.
 ```
 
 ## Команды
