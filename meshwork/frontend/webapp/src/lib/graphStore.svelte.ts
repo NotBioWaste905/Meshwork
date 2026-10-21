@@ -215,7 +215,7 @@ export function criticalPath(tasks: Task[]): string[] {
 	const longest = (id: string): string[] => {
 		const cached = memo.get(id);
 		if (cached) return cached;
-		if (visiting.has(id)) return [id]; // cycle guard, the backend does not forbid cycles yet
+		if (visiting.has(id)) return [id]; // cycle guard; the backend rejects cycles, but stay safe
 		visiting.add(id);
 		let best: string[] = [];
 		for (const dep of byId.get(id)?.depends_on ?? []) {
