@@ -21,6 +21,8 @@ meshwork/backend_rs/         # Активный бэкенд: Rust, axum 0.6, fa
   tests/api.rs               #   интеграционные тесты против живой FalkorDB
 meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre
   src/lib/api.ts             #   единственный HTTP-клиент к бэкенду, зеркало schemas.rs
+  src/lib/graphStore.svelte.ts #  задачи открытого графа, общие для всех экранов графа
+  src/routes/graphs/         #   список графов (известных этому браузеру, localStorage) и new/: создание
   src/routes/graph/          #   +page.svelte: редирект на последний/новый граф
                              #   [id]/+page.svelte: граф-вью; TaskNode.svelte: нода и модалка редактирования
 ```

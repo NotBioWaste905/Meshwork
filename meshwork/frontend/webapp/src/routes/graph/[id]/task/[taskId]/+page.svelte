@@ -3,11 +3,9 @@
 	import { page } from '$app/state';
 	import { Status, type Task } from '$lib/api';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import MockBadge from '$lib/components/MockBadge.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
-	import { MEMBERS, MOCK_REVIEWER, mockActivity, CURRENT_USER } from '$lib/mock';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
 	let taskId = $derived(page.params.taskId ?? '');
@@ -49,10 +47,13 @@
 	let editTags = $state('');
 	let saving = $state(false);
 	let addingBlocker = $state(false);
-	let comment = $state('');
-	let comments = $state<{ text: string; when: string }[]>([]);
 
-	let activity = mockActivity();
+	// SvelteKit reuses this component when navigating task -> task: drop per-task UI state.
+	$effect(() => {
+		void taskId;
+		editing = false;
+		addingBlocker = false;
+	});
 
 	function startEdit() {
 		if (!task) return;
@@ -88,7 +89,10 @@
 	}
 
 	function setAssignee(name: string) {
-		if (task) graphStore.updateTask(task.id, { users: name ? [name] : [] });
+		if (!task) return;
+		const user = name.trim();
+		if (user === (task.users[0] ?? '')) return;
+		graphStore.updateTask(task.id, { users: user ? [user] : [] });
 	}
 
 	async function addBlocker(event: Event) {
@@ -103,15 +107,6 @@
 	async function removeTask() {
 		if (!task || !confirm(`Delete "${task.name}"? This cannot be undone.`)) return;
 		if (await graphStore.deleteTask(task.id)) await goto(base);
-	}
-
-	function addComment(event: SubmitEvent) {
-		event.preventDefault();
-		const text = comment.trim();
-		if (!text) return;
-		// MOCK: comments are kept in memory only, the API has none.
-		comments = [{ text, when: 'Just now' }, ...comments];
-		comment = '';
 	}
 
 	// Neighbourhood sketch: up to 3 blockers on the left, up to 3 dependents on the right.
@@ -268,12 +263,11 @@
 				</section>
 
 				<section aria-labelledby="ver" class="card flex flex-col gap-3 px-6 py-5">
-					<h2 id="ver" class="m-0 flex items-center gap-2 text-[17px] font-semibold">
-						Verification <MockBadge note="Reviewer is demo data: the API has no reviewer field" />
-					</h2>
+					<h2 id="ver" class="m-0 text-[17px] font-semibold">Verification</h2>
 					<p class="text-ink-3 m-0 text-[15px] leading-normal">
-						This task closes only after {MOCK_REVIEWER} confirms the result. Marking it as done yourself
-						is not enough.
+						{task.status === Status.REVIEW
+							? 'The result is waiting for a check. Approve it to mark the task done, or send it back to work.'
+							: 'When the work is finished, send the task to review so someone checks the result before it is done.'}
 					</p>
 					<div class="flex flex-wrap gap-3">
 						{#if task.status === Status.REVIEW}
@@ -301,40 +295,6 @@
 						{/if}
 					</div>
 				</section>
-
-				<section aria-labelledby="act" class="flex flex-col gap-4">
-					<h2 id="act" class="m-0 flex items-center gap-2 text-[17px] font-semibold">
-						Activity <MockBadge note="Demo data: the backend keeps no change log yet" />
-					</h2>
-					<ol class="m-0 flex list-none flex-col p-0">
-						{#each [...comments.map( (c) => ({ who: CURRENT_USER.name, what: `commented: ${c.text}`, when: c.when }) ), ...activity] as a, i (i)}
-							<li class="flex gap-3.5 pb-[18px]">
-								<div class="flex flex-col items-center">
-									<Avatar name={a.who} size={28} />
-									<span class="bg-line mt-1.5 w-0.5 flex-1"></span>
-								</div>
-								<div class="flex min-w-0 flex-col gap-0.5">
-									<div class="text-[15px] leading-snug">
-										<strong class="font-semibold">{a.who}</strong>
-										{a.what}
-									</div>
-									<div class="text-muted text-[13px]">{a.when}</div>
-								</div>
-							</li>
-						{/each}
-					</ol>
-					<form class="flex flex-col gap-2" onsubmit={addComment}>
-						<label for="cmt" class="text-sm font-medium">Add a comment</label>
-						<textarea
-							id="cmt"
-							rows="3"
-							class="field resize-y"
-							placeholder="Write a note for the team"
-							bind:value={comment}
-						></textarea>
-						<button type="submit" class="btn btn-primary btn-sm self-end">Comment</button>
-					</form>
-				</section>
 			</main>
 
 			<aside class="flex max-w-full min-w-0 flex-[1_1_300px] flex-col gap-5">
@@ -359,30 +319,27 @@
 						<dt class="text-muted">Assignee</dt>
 						<dd class="m-0 flex items-center gap-2">
 							{#if task.users[0]}<Avatar name={task.users[0]} size={24} />{/if}
-							<select
-								class="border-line-strong bg-surface h-8 min-w-0 flex-1 rounded-lg border py-0 pr-8 pl-2.5 text-sm"
+							<input
+								type="text"
+								class="border-line-strong bg-surface h-8 min-w-0 flex-1 rounded-lg border px-2.5 py-0 text-sm"
 								aria-label="Assignee"
+								placeholder="Unassigned"
+								list="assignee-options"
+								autocomplete="off"
 								value={task.users[0] ?? ''}
 								onchange={(e) => setAssignee(e.currentTarget.value)}
-							>
-								<option value="">Unassigned</option>
-								{#each task.users[0] && !MEMBERS.some((m) => m.name === task.users[0]) ? [task.users[0]] : [] as u (u)}
-									<option value={u}>{u}</option>
+								onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+							/>
+							<datalist id="assignee-options">
+								{#each graphStore.users as user (user)}
+									<option value={user}></option>
 								{/each}
-								{#each MEMBERS as m (m.name)}<option value={m.name}>{m.name}</option>{/each}
-							</select>
-						</dd>
-						<dt class="text-muted">Reviewer</dt>
-						<dd class="m-0 flex items-center gap-2">
-							<Avatar name={MOCK_REVIEWER} size={24} />{MOCK_REVIEWER}
-							<MockBadge />
+							</datalist>
 						</dd>
 						<dt class="text-muted">Graph</dt>
 						<dd class="m-0"><a href={base}>{graphStore.name}</a></dd>
 						<dt class="text-muted">Type</dt>
 						<dd class="m-0">{isChore ? 'Chore' : 'Task'}</dd>
-						<dt class="text-muted">Created</dt>
-						<dd class="m-0 flex items-center gap-2">Oct 14, by Andrei <MockBadge /></dd>
 					</dl>
 				</section>
 
@@ -391,7 +348,6 @@
 					<svg
 						viewBox="0 0 280 {height}"
 						class="h-auto w-full"
-						role="img"
 						aria-label="Blockers lead to this task, which leads to the tasks it blocks"
 						fill="none"
 					>
@@ -424,17 +380,7 @@
 						</g>
 						<g font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="500">
 							{#each left as t, i (t.id)}
-								<rect
-									x="6"
-									y={rowY(i, left.length) - 18}
-									width="76"
-									height="36"
-									rx="8"
-									fill="#fff"
-									stroke="#C9D0D8"
-								/>
-								<circle cx="18" cy={rowY(i, left.length)} r="4" fill={STATUS_META[t.status].dot} />
-								<text x="27" y={rowY(i, left.length) + 4} fill="#12161C">{shortId(t)}</text>
+								{@render neighbor(t, 6, rowY(i, left.length), 76, 'Blocker')}
 							{/each}
 							<rect
 								x="128"
@@ -449,22 +395,7 @@
 							<circle cx="140" cy={height / 2} r="4" fill={STATUS_META[task.status].dot} />
 							<text x="149" y={height / 2 + 4} fill="#12161C">{shortId(task)}</text>
 							{#each right as t, i (t.id)}
-								<rect
-									x="214"
-									y={rowY(i, right.length) - 18}
-									width="60"
-									height="36"
-									rx="8"
-									fill="#fff"
-									stroke="#C9D0D8"
-								/>
-								<circle
-									cx="226"
-									cy={rowY(i, right.length)}
-									r="4"
-									fill={STATUS_META[t.status].dot}
-								/>
-								<text x="235" y={rowY(i, right.length) + 4} fill="#12161C">{shortId(t)}</text>
+								{@render neighbor(t, 214, rowY(i, right.length), 60, 'Blocks')}
 							{/each}
 						</g>
 					</svg>
@@ -492,4 +423,26 @@
 			>
 		{/if}
 	</li>
+{/snippet}
+
+{#snippet neighbor(t: Task, x: number, y: number, width: number, relation: string)}
+	<a
+		href="{base}/task/{t.id}"
+		class="group cursor-pointer outline-none"
+		aria-label="{relation}: {shortId(t)} {t.name}"
+	>
+		<title>{shortId(t)} {t.name}</title>
+		<rect
+			{x}
+			y={y - 18}
+			{width}
+			height="36"
+			rx="8"
+			fill="#fff"
+			stroke="#C9D0D8"
+			class="group-hover:fill-canvas group-hover:stroke-accent group-focus-visible:stroke-accent transition-colors group-focus-visible:stroke-2"
+		/>
+		<circle cx={x + 12} cy={y} r="4" fill={STATUS_META[t.status].dot} />
+		<text x={x + 21} y={y + 4} fill="#12161C" class="group-hover:fill-accent">{shortId(t)}</text>
+	</a>
 {/snippet}

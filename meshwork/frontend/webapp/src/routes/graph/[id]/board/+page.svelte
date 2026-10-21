@@ -26,14 +26,14 @@
 		<button
 			type="button"
 			class="chip"
-			aria-pressed={graphStore.filter !== 'mine'}
+			aria-pressed={graphStore.filter === 'all'}
 			onclick={() => (graphStore.filter = 'all')}>All tasks · {graphStore.tasks.length}</button
 		>
 		<button
 			type="button"
 			class="chip"
-			aria-pressed={graphStore.filter === 'mine'}
-			onclick={() => (graphStore.filter = 'mine')}>Mine · {graphStore.mineCount}</button
+			aria-pressed={graphStore.filter === 'blocked'}
+			onclick={() => (graphStore.filter = 'blocked')}>Blocked · {graphStore.blockedCount}</button
 		>
 		<span class="chip cursor-default" title="Only grouping by status is supported">
 			Group by: Status

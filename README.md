@@ -10,8 +10,8 @@ product idea (in Russian).
 
 > **Status: early development.** Tasks, dependencies and the three views work
 > against the real backend. Users, auth, the activity log, reviewers and graph
-> metadata do not exist in the API yet; the UI shows mock data for them,
-> marked with a `mock` badge. The full list is in [TODO.md](TODO.md).
+> metadata do not exist in the API yet, so the UI leaves those parts of the
+> design out. The full list is in [TODO.md](TODO.md).
 
 ## Stack
 

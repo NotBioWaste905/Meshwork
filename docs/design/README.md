@@ -20,3 +20,7 @@
 Токены: шрифты IBM Plex Sans / Mono; фон `#F4F6F8`, текст `#12161C`, акцент `#2349C7`;
 статусы TODO `#E8EBEF/#3E4753`, IN_PROGRESS `#DCE8FF/#1B3FA8`, REVIEW `#EADFFB/#5A2BA6`,
 DONE `#D5F0E3/#0F5C3A`, BLOCKED `#FFE1D3/#A13A0B`.
+
+Экраны Main (вход), User и Settings, «Waiting on you», шаблоны графов, лог активности и
+комментарии во фронте не реализованы: в API нет пользователей, авторизации и истории изменений
+(см. TODO.md, «Дыры API для нового UI»).

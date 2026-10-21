@@ -1,3 +1,10 @@
+<script lang="ts" module>
+	import type { XYPosition } from '@xyflow/svelte';
+
+	/** Node positions per graph for this session; the backend does not store them. */
+	const savedPositions = new Map<string, Map<string, XYPosition>>();
+</script>
+
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import {
@@ -15,12 +22,19 @@
 
 	import TaskNode from '../TaskNode.svelte';
 	import GraphControls from '../GraphControls.svelte';
+	import ContextMenu from '../ContextMenu.svelte';
 	import GraphHeader from '$lib/components/GraphHeader.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { Status, type Task } from '$lib/api';
 	import { criticalPath, graphStore, type TaskFilter } from '$lib/graphStore.svelte';
 	import { shortId, STATUS_META } from '$lib/status';
-	import { NODE_HEIGHT, NODE_WIDTH, type TaskFlowEdge, type TaskFlowNode } from '../types';
+	import {
+		NODE_HEIGHT,
+		NODE_WIDTH,
+		type MenuTarget,
+		type TaskFlowEdge,
+		type TaskFlowNode
+	} from '../types';
 
 	const nodeTypes: NodeTypes = { task: TaskNode };
 
@@ -31,12 +45,16 @@
 	let edges = $state.raw<TaskFlowEdge[]>([]);
 	let selectedId = $state<string | null>(null);
 	let showCritical = $state(false);
+	let menu = $state<MenuTarget | null>(null);
+	/** Graph whose layout `nodes` holds. */
+	let layoutFor = '';
+	/** Where tasks created from the context menu go, until they get a node. */
+	const placed = new Map<string, XYPosition>();
 
 	let selected = $derived(selectedId ? graphStore.byId.get(selectedId) : undefined);
 	let terminal = $derived(graphStore.terminals.length === 1 ? graphStore.terminals[0] : undefined);
 	let chips = $derived<{ id: TaskFilter; label: string; count: number }[]>([
 		{ id: 'all', label: 'All tasks', count: graphStore.tasks.length },
-		{ id: 'mine', label: 'Mine', count: graphStore.mineCount },
 		{ id: 'blocked', label: 'Blocked', count: graphStore.blockedCount }
 	]);
 
@@ -59,14 +77,17 @@
 	}
 
 	function rebuild(tasks: Task[], selectedTaskId: string | null, critical: boolean) {
-		const previous = new Map(nodes.map((n) => [n.id, n.position]));
+		const previous =
+			nodes.length > 0
+				? new Map(nodes.map((n) => [n.id, n.position]))
+				: (savedPositions.get(layoutFor) ?? new Map<string, XYPosition>());
 		const fresh = previous.size === 0 ? computeLayout(tasks) : null;
 		const maxY = Math.max(0, ...[...previous.values()].map((p) => p.y));
 		let added = 0;
 		const dependents = graphStore.dependents;
 
 		nodes = tasks.map((task) => {
-			let position = previous.get(task.id) ?? fresh?.get(task.id);
+			let position = previous.get(task.id) ?? placed.get(task.id) ?? fresh?.get(task.id);
 			if (!position) position = { x: 40 + 200 * added++, y: maxY + NODE_HEIGHT + 40 };
 			return {
 				id: task.id,
@@ -102,25 +123,38 @@
 		);
 	}
 
-	// Rebuild from the shared store; positions of existing nodes are kept.
+	// Rebuild from the shared store; positions of existing nodes are kept. Reading the graph id
+	// and the tasks in one effect matters: when the view remounts (e.g. back from Board) the
+	// tasks are already loaded, and a separate "reset on graph change" effect running after
+	// the rebuild used to wipe the freshly built nodes, leaving an empty canvas.
 	$effect(() => {
+		const graphId = graphStore.graphId;
 		const tasks = graphStore.tasks;
 		void graphStore.filter;
-		const sel = selectedId;
+		void selectedId;
 		const critical = showCritical;
-		untrack(() => rebuild(tasks, sel, critical));
+		untrack(() => {
+			if (graphId !== layoutFor) {
+				// a different graph starts from its remembered layout, or a fresh one
+				layoutFor = graphId;
+				nodes = [];
+				selectedId = null;
+			}
+			rebuild(tasks, selectedId, critical);
+		});
 	});
 
-	// A different graph starts from a fresh layout.
-	let layoutFor = '';
+	// Remember positions so switching to Board/Table and back keeps the layout.
 	$effect(() => {
-		const id = graphStore.graphId;
-		if (id !== layoutFor) {
-			layoutFor = id;
-			nodes = [];
-			selectedId = null;
+		if (layoutFor && nodes.length > 0) {
+			savedPositions.set(layoutFor, new Map(nodes.map((n) => [n.id, n.position])));
 		}
 	});
+
+	function placeNode(id: string, position: XYPosition) {
+		placed.set(id, position);
+		nodes = nodes.map((n) => (n.id === id ? { ...n, position } : n));
+	}
 
 	function autoLayout() {
 		const positions = computeLayout(graphStore.tasks);
@@ -206,6 +240,15 @@
 				onedgeclick={onEdgeClick}
 				onnodeclick={({ node }) => (selectedId = node.id)}
 				onpaneclick={() => (selectedId = null)}
+				onpanecontextmenu={({ event }) => {
+					event.preventDefault();
+					menu = { kind: 'pane', x: event.clientX, y: event.clientY };
+				}}
+				onnodecontextmenu={({ event, node }) => {
+					event.preventDefault();
+					menu = { kind: 'node', x: event.clientX, y: event.clientY, id: node.id };
+				}}
+				onmovestart={() => (menu = null)}
 				proOptions={{ hideAttribution: true }}
 			>
 				<Background
@@ -216,6 +259,11 @@
 					patternColor="#C9D0D8"
 				/>
 				<GraphControls onLayout={autoLayout} />
+				{#if menu}
+					{#key menu}
+						<ContextMenu target={menu} onclose={() => (menu = null)} onplace={placeNode} />
+					{/key}
+				{/if}
 				<MiniMap
 					width={180}
 					height={112}

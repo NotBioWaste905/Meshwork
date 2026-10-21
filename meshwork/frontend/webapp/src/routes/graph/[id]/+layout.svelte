@@ -11,7 +11,8 @@
 	let graphId = $derived(page.params.id ?? '');
 
 	$effect(() => {
-		untrack(() => graphStore.load(graphId));
+		const id = graphId; // tracked: reload when navigating to another graph
+		untrack(() => graphStore.load(id));
 	});
 
 	$effect(() => {

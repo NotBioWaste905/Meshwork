@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import MockBadge from '$lib/components/MockBadge.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { rememberKnownGraph } from '$lib/graphStore.svelte';
-	import { GRAPH_TEMPLATES } from '$lib/mock';
 	import { LAST_GRAPH_KEY } from '../../graph/lastGraph';
 
 	let goal = $state('');
@@ -131,18 +129,5 @@
 				</div>
 			{/if}
 		</form>
-
-		<div class="flex w-full max-w-[520px] flex-col gap-2.5">
-			<span class="text-muted flex items-center gap-2 text-sm">
-				Or start from a template <MockBadge note="Templates are not in the backend yet" />
-			</span>
-			<div class="flex flex-wrap gap-2.5">
-				{#each GRAPH_TEMPLATES as template (template)}
-					<button type="button" class="btn btn-secondary h-11 px-4 text-sm" disabled
-						>{template}</button
-					>
-				{/each}
-			</div>
-		</div>
 	</div>
 </main>
