@@ -10,7 +10,7 @@ use falkordb::{AsyncGraph, QueryResult, Row, RowStream};
 use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
-use crate::schemas::{Status, Task};
+use crate::schemas::{GraphInfo, Status, Task};
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
     let mut data = result.data;
@@ -28,10 +28,69 @@ fn first_count(rows: &[Row]) -> Result<i64> {
     }
 }
 
-pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<()> {
+pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
     graph
-        .query("CREATE (:Graph {id: $id})")
+        .query("CREATE (:Graph {id: $id, name: $name, created_at: timestamp()})")
         .with_param("id", graph_id)
+        .with_param("name", name)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+const GRAPH_RETURN: &str = "OPTIONAL MATCH (t:Task)-[:PART_OF]->(g) \
+     RETURN g.id AS id, g.name AS name, g.created_at AS created_at, \
+            count(t) AS task_count, \
+            count(CASE WHEN t.status = 'DONE' THEN 1 END) AS done_count, \
+            count(CASE WHEN t.status = 'BLOCKED' THEN 1 END) AS blocked_count";
+
+fn row_to_graph(row: &Row) -> Result<GraphInfo> {
+    Ok(GraphInfo {
+        id: row.try_get("id").map_err(db_err)?,
+        name: row
+            .try_get::<Option<String>>("name")
+            .map_err(db_err)?
+            .unwrap_or_default(),
+        task_count: row.try_get("task_count").map_err(db_err)?,
+        done_count: row.try_get("done_count").map_err(db_err)?,
+        blocked_count: row.try_get("blocked_count").map_err(db_err)?,
+    })
+}
+
+/// All graphs, newest first; graphs without `created_at` (older ones) go last.
+pub async fn list_graphs(graph: &mut AsyncGraph) -> Result<Vec<GraphInfo>> {
+    let q = format!(
+        "MATCH (g:Graph) {} ORDER BY coalesce(created_at, 0) DESC, id",
+        GRAPH_RETURN
+    );
+    let result = graph.query(q).execute().await.map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(row_to_graph)
+        .collect()
+}
+
+pub async fn get_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<GraphInfo> {
+    let q = format!("MATCH (g:Graph {{id: $graph_id}}) {}", GRAPH_RETURN);
+    let result = graph
+        .query(q)
+        .with_param("graph_id", graph_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    match collect_rows(result).await?.first() {
+        Some(row) => row_to_graph(row),
+        None => Err(AppError::NotFound(format!("Graph {} not found", graph_id))),
+    }
+}
+
+pub async fn rename_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
+    graph
+        .query("MATCH (g:Graph {id: $graph_id}) SET g.name = $name")
+        .with_param("graph_id", graph_id)
+        .with_param("name", name)
         .execute()
         .await
         .map_err(db_err)?;
