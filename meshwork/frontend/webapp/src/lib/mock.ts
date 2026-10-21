@@ -63,3 +63,18 @@ export const MOCK_GRAPHS: MockGraph[] = [
 
 /** MOCK: starting points offered on the new-graph screen. There are no templates in the backend. */
 export const GRAPH_TEMPLATES = ['Software release', 'Hiring pipeline', 'Incident response'];
+
+export type ActivityEntry = { who: string; what: string; when: string };
+
+/** MOCK: change log of a task. The backend keeps no history yet. */
+export function mockActivity(): ActivityEntry[] {
+	return [
+		{ who: 'Ilya Petrov', what: 'moved a blocker to Review', when: 'Today, 10:42' },
+		{ who: 'Andrei Chirkin', what: 'changed the status', when: 'Yesterday, 17:05' },
+		{ who: 'Andrei Chirkin', what: 'added a blocker', when: 'Oct 15, 11:20' },
+		{ who: 'Andrei Chirkin', what: 'created this task', when: 'Oct 14, 16:41' }
+	];
+}
+
+/** MOCK: every task is verified by this person. There is no reviewer field. */
+export const MOCK_REVIEWER = 'Sofia Lindqvist';
