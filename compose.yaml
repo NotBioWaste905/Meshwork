@@ -4,6 +4,7 @@ services:
     build: ./meshwork/backend_rs
     environment:
       - FALKORDB_URL=falkor://falkordb:6379
+      - CORS_ALLOW_ORIGINS=http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:

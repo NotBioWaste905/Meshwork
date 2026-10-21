@@ -104,6 +104,7 @@ dependencies = [
  "axum",
  "falkordb",
  "futures",
+ "hyper",
  "serde",
  "serde_json",
  "tokio",
