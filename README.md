@@ -124,7 +124,7 @@ meshwork/frontend/webapp/   SvelteKit web app
 docs/architecture.md        C4 diagrams
 docs/design/                Screen designs the UI follows
 MISSION.md                  Product idea
-TODO.md                     Phased backlog
+TODO.md                     MVP plan (M0–M4) and backlog
 CLAUDE.md                   Notes for AI coding agents
 ```
 
