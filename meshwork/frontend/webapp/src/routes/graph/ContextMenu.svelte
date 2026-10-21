@@ -87,7 +87,8 @@
 		list[next].focus();
 	}
 
-	function onwindowpointerdown(event: PointerEvent) {
+	/** Outside clicks and scroll/zoom of the canvas close the menu; the flow position is stale. */
+	function onoutside(event: Event) {
 		if (menu && !menu.contains(event.target as Node)) onclose();
 	}
 
@@ -138,7 +139,8 @@
 <svelte:window
 	bind:innerWidth={viewportWidth}
 	bind:innerHeight={viewportHeight}
-	onpointerdown={onwindowpointerdown}
+	onpointerdowncapture={onoutside}
+	onwheelcapture={onoutside}
 	onresize={onclose}
 	onblur={onclose}
 />
