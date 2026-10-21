@@ -34,16 +34,20 @@ C4Container
     title Meshwork — Containers (as-is)
 
     Person(user, "Пользователь")
+    System_Ext(agent, "AI-агент", "Claude Code и др. MCP-клиенты")
 
     System_Boundary(meshwork, "Meshwork") {
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
         Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей")
+        Container(mcp, "MCP Server", "Rust, axum 0.8, rmcp", "Streamable HTTP :8080/mcp, bearer-токены; инструменты для AI-агентов поверх REST бэкенда (list_ready_tasks, get_task_context, update_task, link_tasks...)")
         ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/User, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")
     Rel(frontend, backend, "REST /v0/...", "JSON over HTTP :8000")
     Rel(backend, db, "Redis protocol", "falkordb crate (async)")
+    Rel(agent, mcp, "MCP over HTTP", "Authorization: Bearer")
+    Rel(mcp, backend, "REST /v0/...", "JSON over HTTP :8000")
 ```
 
 ## Level 2 — Containers (целевое, по MISSION.md)

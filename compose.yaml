@@ -15,6 +15,17 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+  mcp:
+    build: ./meshwork/mcp_rs
+    environment:
+      - BACKEND_URL=http://backend:8000
+      # Comma-separated bearer tokens. Set MCP_TOKENS before `docker compose up`
+      # for anything beyond local development.
+      - MCP_TOKENS=${MCP_TOKENS:-dev-token}
+    ports:
+      - "127.0.0.1:8080:8080" # loopback only: rmcp accepts only loopback Host headers by default
+    depends_on:
+      - backend
   falkordb:
     image: falkordb/falkordb:v4.22.2 # keep in sync with .github/workflows/ci.yml
     environment:
