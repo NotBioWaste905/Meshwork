@@ -44,7 +44,7 @@
 		<Card class="md:p-4">
 			<Heading tag="h2" class="mb-4">My Teams</Heading>
 			<Listgroup active>
-				{#each teams as team}
+				{#each teams as team (team.id)}
 					<ListgroupItem class="cursor-pointer hover:bg-orange-50">
 						<div class="flex w-full items-center justify-between">
 							<span>{team.name}</span>
@@ -61,7 +61,7 @@
 		<Card class="md:p-4">
 			<Heading tag="h2" class="mb-4">Task Graphs</Heading>
 			<Listgroup active>
-				{#each taskGraphs as graph}
+				{#each taskGraphs as graph (graph.id)}
 					<ListgroupItem class="cursor-pointer hover:bg-orange-50">
 						<Progressbar progress={graph.progress} labelOutside={graph.name} />
 					</ListgroupItem>

@@ -16,7 +16,7 @@ services:
     depends_on:
       - backend
   falkordb:
-    image: falkordb/falkordb:latest
+    image: falkordb/falkordb:v4.22.2 # keep in sync with .github/workflows/ci.yml
     volumes:
       - falkordb_data:/var/lib/falkordb/data
     ports:

@@ -26,7 +26,7 @@
 - [x] `tags` сохраняются
 - [x] Интеграционные тесты хендлеров против FalkorDB (`cargo test -- --ignored`)
 - [x] Docker: `.dockerignore`, фронт собирается без хостового `node_modules`, `rust:1.99` запинен
-- [ ] Гонять интеграционные тесты в CI (service container FalkorDB)
+- [x] Интеграционные тесты в CI (FalkorDB в service-контейнере)
 
 ## Фаза 1 — модель данных по MISSION
 
@@ -59,11 +59,12 @@
 
 - [ ] Удалить `meshwork/backend/` (legacy Python), когда Rust догонит функциональность; до тех пор — не трогать
 - [ ] README: актуализировать (стек, порты, фронт на :3000, убрать обещания про автоматизацию как фичи)
-- [ ] CI: `actions-rs` (deprecated) → `dtolnay/rust-toolchain`, `actions/checkout@v4`, добавить `clippy`/`fmt --check`, кеш `target`, запуск на всех ветках/PR
-- [ ] CI для фронта: `npm run check` + `npm run lint`
-- [ ] Rust Dockerfile: multi-stage; запинить `falkordb/falkordb` в compose; `node:19` → LTS
+- [x] CI: `dtolnay/rust-toolchain`, `checkout@v4`, fmt/clippy, `rust-cache`, запуск на `main`/`dev` и PR в них
+- [x] CI для фронта: check, lint, build
+- [x] `falkordb/falkordb` запинен (v4.22.2)
+- [ ] Rust Dockerfile: multi-stage; `node:19` → LTS
 - [ ] Апгрейд axum 0.6 → 0.8 (+ tower-http 0.6)
 - [ ] Удалить неиспользуемые страницы-заглушки фронта (`pricing`, `contact`, `account`) или пометить как TODO
 - [ ] `.zed/` в `.gitignore`, но `.zed/settings.json` закоммичен — выбрать одно
-- [ ] Фронт: инлайн-ошибки svelte-check/eslint в `account/` (each без key), неиспользуемый CSS в графе
+- [ ] Фронт: неиспользуемый CSS в графе (3 warning svelte-check)
 - [ ] Позиции нод не сохраняются — после перезагрузки раскладка сбрасывается

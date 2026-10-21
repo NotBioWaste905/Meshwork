@@ -54,8 +54,11 @@ npm run format
 
 Фронт: `VITE_API_URL` (build-time, default `http://localhost:8000`), см. `.env.example`.
 
-CI: [.github/workflows/backend_build_check.yml](.github/workflows/backend_build_check.yml) —
-только `cargo build` бэкенда, только для `main`. Интеграционные тесты в CI не гоняются.
+CI: [.github/workflows/ci.yml](.github/workflows/ci.yml) — на push и PR
+в `main`/`dev`. Бэкенд: `cargo fmt --check`, `clippy -D warnings`,
+интеграционные тесты против FalkorDB в service-контейнере. Фронт:
+`npm run check`, `npm run lint`, `npm run build`. Версия FalkorDB
+запинена в двух местах — `compose.yaml` и `ci.yml`, держи их одинаковыми.
 
 ## Модель в БД (как сейчас в коде)
 
@@ -102,9 +105,10 @@ API (`/v0/...`): `POST create_graph`; `GET :graph/all_tasks`;
 
 ## Конвенции
 
-- Работа идёт маленькими ветками от `main` (одна задача из TODO.md —
-  одна ветка), по готовности — в `main`. Отмечай сделанное в TODO.md
-  в той же ветке.
+- Ветки: `main` — стабильная, `dev` — интеграционная. Каждая задача из
+  TODO.md — короткая ветка от `dev` (`feat/…`, `fix/…`, `ci/…`, `docs/…`),
+  вливается PR-ом в `dev` после зелёного CI. `dev` → `main` — когда набралось
+  законченное (например, фаза бэклога). Отмечай сделанное в TODO.md в той же ветке.
 - Сообщения коммитов — короткие, на английском, в повелительном
   наклонении (`Add …`, `Fix …`).
 - Документация проекта (MISSION, architecture, TODO) — на русском.
