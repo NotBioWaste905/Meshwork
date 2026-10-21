@@ -78,3 +78,41 @@ export function mockActivity(): ActivityEntry[] {
 
 /** MOCK: every task is verified by this person. There is no reviewer field. */
 export const MOCK_REVIEWER = 'Sofia Lindqvist';
+
+/** MOCK: recent activity of the user. There is no event log in the backend. */
+export const MOCK_RECENT_ACTIVITY: { what: string; when: string }[] = [
+	{ what: 'Changed a task from To do to Blocked', when: 'Yesterday, 17:05' },
+	{ what: 'Commented on Draft failover runbook', when: 'Yesterday, 14:30' },
+	{ what: 'Completed Security sync call', when: 'Oct 12' },
+	{ what: 'Created Integrate frontend and backend', when: 'Oct 14' }
+];
+
+export type NotificationPref = { id: string; title: string; hint: string; on: boolean };
+
+/** Default notification preferences. Stored per browser only: there are no notifications yet. */
+export const NOTIFICATION_PREFS: NotificationPref[] = [
+	{
+		id: 'unblocked',
+		title: 'A task I am assigned to becomes unblocked',
+		hint: 'All its blockers are done',
+		on: true
+	},
+	{
+		id: 'blocked',
+		title: 'A task I own gets blocked',
+		hint: 'Someone adds a blocker or a blocker is reopened',
+		on: true
+	},
+	{
+		id: 'review',
+		title: 'I am asked to review a result',
+		hint: 'A task moves to Review with me as reviewer',
+		on: true
+	},
+	{
+		id: 'edited',
+		title: 'Anyone edits a task I created',
+		hint: 'Every change is logged either way',
+		on: false
+	}
+];
