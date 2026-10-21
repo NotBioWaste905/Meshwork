@@ -222,6 +222,34 @@ pub async fn update_task_props(
     Ok(())
 }
 
+/// Returns one of `depends_on` that already (transitively) depends on
+/// `task_id`, i.e. a dependency whose edge would close a cycle.
+pub async fn find_cycle(
+    graph: &mut AsyncGraph,
+    task_id: &str,
+    depends_on: &[String],
+) -> Result<Option<String>> {
+    if depends_on.is_empty() {
+        return Ok(None);
+    }
+    let result = graph
+        .query(
+            "UNWIND $deps AS dep_id \
+             MATCH (:Task {id: dep_id})-[:DEPENDS_ON*1..]->(:Task {id: $id}) \
+             RETURN dep_id AS id \
+             LIMIT 1",
+        )
+        .with_param("id", task_id)
+        .with_param("deps", depends_on.to_vec())
+        .execute()
+        .await
+        .map_err(db_err)?;
+    match collect_rows(result).await?.first() {
+        Some(row) => Ok(Some(row.try_get("id").map_err(db_err)?)),
+        None => Ok(None),
+    }
+}
+
 /// Replaces the task's outgoing `DEPENDS_ON` edges with edges to `depends_on`.
 pub async fn set_dependencies(
     graph: &mut AsyncGraph,

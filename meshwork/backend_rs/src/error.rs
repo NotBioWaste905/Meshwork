@@ -12,6 +12,7 @@ pub enum AppError {
     Database(String),
     NotFound(String),
     BadRequest(String),
+    Conflict(String),
     Internal(String),
 }
 
@@ -32,6 +33,10 @@ impl IntoResponse for AppError {
             AppError::BadRequest(msg) => {
                 warn!("Bad request: {}", msg);
                 (StatusCode::BAD_REQUEST, msg)
+            }
+            AppError::Conflict(msg) => {
+                warn!("Conflict: {}", msg);
+                (StatusCode::CONFLICT, msg)
             }
             AppError::Internal(msg) => {
                 error!("Internal error: {}", msg);
