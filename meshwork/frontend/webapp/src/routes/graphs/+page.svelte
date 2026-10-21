@@ -1,30 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api, ApiError, type Task } from '$lib/api';
-	import MockBadge from '$lib/components/MockBadge.svelte';
-	import StatusPill from '$lib/components/StatusPill.svelte';
+	import { api, ApiError } from '$lib/api';
 	import {
-		blockingOthers,
 		forgetKnownGraph,
 		knownGraphIds,
 		summarize,
 		type GraphSummary
 	} from '$lib/graphStore.svelte';
-	import { MOCK_GRAPHS } from '$lib/mock';
-	import { shortId } from '$lib/status';
 
 	const COLORS = ['#2349C7', '#0F766E', '#7A3FC4', '#B4530A'];
 
 	let graphs = $state<GraphSummary[]>([]);
-	let waiting = $state<{ task: Task; blocks: number; graph: GraphSummary }[]>([]);
 	let loading = $state(true);
 	let query = $state('');
 
 	let matching = $derived(
 		graphs.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()))
-	);
-	let matchingMock = $derived(
-		MOCK_GRAPHS.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()))
 	);
 
 	onMount(async () => {
@@ -39,11 +30,7 @@
 				}
 			})
 		);
-		const found = loaded.filter((g) => g !== null);
-		graphs = found.map((g) => summarize(g.id, g.tasks));
-		waiting = found.flatMap((g, i) =>
-			blockingOthers(g.tasks).map((w) => ({ ...w, graph: graphs[i] }))
-		);
+		graphs = loaded.filter((g) => g !== null).map((g) => summarize(g.id, g.tasks));
 		loading = false;
 	});
 
@@ -59,7 +46,7 @@
 	total: number,
 	blocked: number,
 	color: string,
-	footer: string
+	id: string
 )}
 	<svg viewBox="0 0 260 70" class="h-[70px] w-full" aria-hidden="true" fill="none">
 		<path
@@ -110,7 +97,7 @@
 				? 'bg-st-blocked-bg text-st-blocked-fg'
 				: 'bg-st-done-bg text-st-done-fg'}">{blocked ? `${blocked} blocked` : 'On track'}</span
 		>
-		<span class="text-muted text-[13px]">{footer}</span>
+		<span class="text-muted font-mono text-[13px]" title="Graph ID">{id.slice(0, 8)}</span>
 	</div>
 {/snippet}
 
@@ -147,36 +134,6 @@
 		</div>
 	</header>
 
-	<section aria-labelledby="attn" class="card flex flex-col gap-3 px-6 py-5">
-		<div class="flex items-baseline gap-3">
-			<h2 id="attn" class="m-0 text-[17px] font-semibold">Waiting on you</h2>
-			<span class="text-muted text-sm">
-				{waiting.length === 0
-					? 'Nothing you own is blocking someone else'
-					: `${waiting.length} ${waiting.length === 1 ? 'task is' : 'tasks are'} blocking someone else`}
-			</span>
-		</div>
-		{#if waiting.length > 0}
-			<ul class="m-0 flex list-none flex-col p-0">
-				{#each waiting as w (w.task.id)}
-					<li class="border-line-soft flex flex-wrap items-center gap-x-4 gap-y-3 border-t py-3">
-						<span class="text-muted w-14 font-mono text-[13px]">{shortId(w.task)}</span>
-						<a
-							href="/graph/{w.graph.id}/task/{w.task.id}"
-							class="text-ink min-w-0 flex-[1_1_260px] text-[15px] font-medium no-underline"
-							>{w.task.name}</a
-						>
-						<span class="text-muted text-sm">{w.graph.name}</span>
-						<StatusPill status={w.task.status} />
-						<span class="text-danger min-w-28 text-right text-sm font-medium"
-							>Blocks {w.blocks} {w.blocks === 1 ? 'task' : 'tasks'}</span
-						>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</section>
-
 	<section
 		aria-label="All graphs"
 		class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5"
@@ -186,7 +143,7 @@
 				href="/graph/{g.id}"
 				class="card text-ink hover:border-line-strong flex flex-col gap-4 p-5 no-underline"
 			>
-				{@render card(g.name, g.goal, g.done, g.total, g.blocked, COLORS[i % COLORS.length], '')}
+				{@render card(g.name, g.goal, g.done, g.total, g.blocked, COLORS[i % COLORS.length], g.id)}
 			</a>
 		{/each}
 		{#if !loading && graphs.length === 0}
@@ -197,21 +154,8 @@
 				>
 				<a href="/graphs/new" class="btn btn-primary btn-sm mt-2">Create the first graph</a>
 			</div>
+		{:else if !loading && matching.length === 0}
+			<p class="text-muted col-span-full m-0 text-sm">No graphs match “{query.trim()}”.</p>
 		{/if}
 	</section>
-
-	{#if matchingMock.length > 0}
-		<section aria-label="Example graphs" class="flex flex-col gap-3">
-			<h2 class="text-ink-3 m-0 flex items-center gap-2 text-[15px] font-semibold">
-				Examples <MockBadge note="Demo graphs: the API has no list of graphs" />
-			</h2>
-			<div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5 opacity-80">
-				{#each matchingMock as g (g.name)}
-					<div class="card flex flex-col gap-4 p-5">
-						{@render card(g.name, g.goal, g.done, g.total, g.blocked, g.color, g.updated)}
-					</div>
-				{/each}
-			</div>
-		</section>
-	{/if}
 </main>

@@ -1,8 +1,7 @@
 import { api, ApiError, Status, type NewTask, type Task, type TaskUpdate } from './api';
-import { CURRENT_USER } from './mock';
 import { shortId } from './status';
 
-export type TaskFilter = 'all' | 'mine' | 'blocked';
+export type TaskFilter = 'all' | 'blocked';
 
 const KNOWN_GRAPHS_KEY = 'meshwork:knownGraphs';
 
@@ -69,14 +68,15 @@ class GraphStore {
 			(this.tasks.length === 1 ? this.tasks[0].name : `Graph ${this.graphId.slice(0, 8)}`)
 	);
 
+	/** Distinct assignees of the graph's tasks. Users are free-form names, there is no user API. */
+	users = $derived([...new Set(this.tasks.flatMap((t) => t.users))].sort());
+
 	doneCount = $derived(this.tasks.filter((t) => t.status === Status.DONE).length);
 	blockedCount = $derived(this.tasks.filter((t) => t.status === Status.BLOCKED).length);
-	mineCount = $derived(this.tasks.filter((t) => isMine(t)).length);
 
 	visible = $derived(this.tasks.filter((t) => this.matches(t)));
 
 	matches(task: Task): boolean {
-		if (this.filter === 'mine') return isMine(task);
 		if (this.filter === 'blocked') return task.status === Status.BLOCKED;
 		return true;
 	}
@@ -200,10 +200,6 @@ class GraphStore {
 	}
 }
 
-export function isMine(task: Task): boolean {
-	return task.users.includes(CURRENT_USER.name);
-}
-
 export const graphStore = new GraphStore();
 
 /** Longest chain of dependencies, as task IDs from the first blocker to the last task. */
@@ -259,20 +255,6 @@ export function summarize(graphId: string, tasks: Task[]): GraphSummary {
 		total: tasks.length,
 		blocked: tasks.filter((t) => t.status === Status.BLOCKED).length
 	};
-}
-
-/** Open tasks of the user that hold up other open tasks. */
-export function blockingOthers(tasks: Task[]): { task: Task; blocks: number }[] {
-	const byId = new Map(tasks.map((t) => [t.id, t]));
-	const result: { task: Task; blocks: number }[] = [];
-	for (const task of tasks) {
-		if (task.status === Status.DONE || !isMine(task)) continue;
-		const blocks = tasks.filter(
-			(t) => t.status !== Status.DONE && t.depends_on.includes(task.id) && byId.has(t.id)
-		).length;
-		if (blocks > 0) result.push({ task, blocks });
-	}
-	return result;
 }
 
 /** What a task waits on or blocks, as one short line. `tasks` is the whole graph of the task. */
