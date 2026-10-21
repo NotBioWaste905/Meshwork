@@ -14,6 +14,7 @@ scripts/                     # backup-falkordb.sh, restore-falkordb.sh
 meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/main.rs                #   bootstrap: env, FalkorDB connection, server
   src/lib.rs                 #   router (app()), CORS, HTTP handlers
+  src/connection.rs          #   FalkorDB client, per-request reconnect ping, index setup
   src/db.rs                  #   all Cypher queries
   src/frontier.rs            #   ready_tasks: pure frontier logic + unit tests
   src/schemas.rs             #   API contract: Task, NewTask, TaskUpdate, Status
@@ -55,7 +56,7 @@ npm run format
 
 Backend env: `FALKORDB_URL` (default `falkor://falkordb:6379`), `FALKORDB_GRAPH` (default
 `meshwork`), `CORS_ALLOW_ORIGINS` (comma-separated or `*`, default
-`http://localhost:3000,http://localhost:5173`). All user graphs live in one FalkorDB graph,
+`http://localhost:3000,http://localhost:5173`), `PORT` (default `8000`). All user graphs live in one FalkorDB graph,
 told apart by a `(:Graph {id})` node; tests use a throwaway FalkorDB graph `test_<uuid>`.
 
 Frontend: `VITE_API_URL` (build time, default `http://localhost:8000`), see `.env.example`.
@@ -102,6 +103,13 @@ API (`/v0/...`):
   AOF on for a volume that only has `dump.rdb`: Redis loads an empty dataset.
 - **FalkorDB, not Neo4j.** Cypher is nearly the same, the driver is `falkordb` (Redis protocol).
   No multi-query transactions: each `query()` is atomic, a handler as a whole is not.
+- **Reconnect.** The client holds one multiplexed socket (redis `ConnectionManager`), which
+  reconnects only after a command fails on it. So every `/v0/` request first runs a read-only
+  ping (`connection::ensure_connection_layer`) that is retried once on a connection error;
+  the handler's own queries, writes included, are never retried — don't add retries there
+  (a retried write can apply twice). While FalkorDB is down, requests answer 500 after ~10 s.
+- Indexes on `Task.id` and `Graph.id` are created at startup (`connection::ensure_indexes`,
+  idempotent). A new label looked up by `id` needs its index added there.
 - Query values only via `.with_param(s)`; never format values into a Cypher string.
 - Handlers that run several queries validate first (graph/tasks exist), then write, so a
   rejected request leaves no partial state. Keep that order.

@@ -16,6 +16,7 @@ use tower_http::{
 use tracing::info;
 use uuid::Uuid;
 
+pub mod connection;
 mod db;
 pub mod error;
 pub mod frontier;
@@ -63,6 +64,10 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         )
         .route("/v0/:graph_id/connect_nodes/", post(connect_nodes))
         .route("/v0/:graph_id/disconnect_nodes/", post(disconnect_nodes))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            connection::ensure_connection_layer,
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)
