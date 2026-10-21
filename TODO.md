@@ -16,7 +16,7 @@
 
 Фронт и Rust-бэкенд говорят на одном контракте; проверено в браузере через `docker compose`.
 
-- [ ] Влить ветку `falkordb` в `main` (CI сейчас гоняется только на `main`)
+- [x] Влить ветку `falkordb` в `main`
 - [x] CORS в Rust, origins из `CORS_ALLOW_ORIGINS`
 - [x] Единый контракт `Task`: `id` от сервера, списки опциональны, `graph_id` из пути, `Status` — `SCREAMING_SNAKE_CASE` строки
 - [x] Реализованы `get_task`, `edit_task` (частичный апдейт), `delete_task`, `connect_nodes`, `disconnect_nodes`
