@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Board view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;display:flex;background:#F4F6F8;overflow:hidden">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:60px;flex:none;background:#fff;border-bottom:1px solid #DDE2E8;display:flex;align-items:center;gap:24px;padding:0 24px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:15px">
+        <a href="Graphs.dc.html" style="color:#5B6572;text-decoration:none">Graphs</a><span style="color:#8995A5">/</span><strong style="font-weight:600">Auth service</strong>
+      </div>
+      <div role="tablist" aria-label="Projection" style="display:flex;background:#E8EBEF;border-radius:10px;padding:3px;gap:2px">
+        <a href="Graph.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Graph</a>
+        <a href="Board.dc.html" aria-current="page" style="height:32px;padding:0 16px;border-radius:8px;background:#fff;color:#12161C;font-size:14px;font-weight:600;display:flex;align-items:center;text-decoration:none;box-shadow:0 1px 2px rgba(18,22,28,.12)">Board</a>
+        <a href="Table.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Table</a>
+      </div>
+      <div style="flex:1"></div>
+      <a href="NewTask.dc.html" style="height:40px;padding:0 16px;border-radius:10px;background:#2349C7;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New task</a>
+    </header>
+
+    <div style="height:52px;flex:none;display:flex;align-items:center;gap:8px;padding:0 24px;border-bottom:1px solid #DDE2E8">
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #12161C;background:#12161C;color:#fff;font-size:13px;font-weight:500">All tasks · 12</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Mine · 3</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Group by: Status ▾</button>
+    </div>
+
+    <div style="flex:1;display:flex;gap:16px;padding:20px 24px;box-sizing:border-box;overflow:hidden">
+      <sc-for list="{{columns}}" as="c" hint-placeholder-count="5">
+        <section style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;background:#E9EDF1;border-radius:14px;padding:12px;box-sizing:border-box">
+          <h2 style="margin:0;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.04em;color:#2B333D;padding:2px 4px"><span style="width:10px;height:10px;border-radius:50%;background:{{c.dot}}"></span>{{c.title}}<span style="font-weight:400;color:#5B6572">{{c.count}}</span></h2>
+          <sc-for list="{{c.cards}}" as="k" hint-placeholder-count="2">
+            <a href="Task.dc.html" style="{{k.box}}">
+              <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5B6572">{{k.id}}</span><span style="width:24px;height:24px;border-radius:50%;background:{{k.avBg}};color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">{{k.av}}</span></div>
+              <div style="font-size:14px;line-height:1.35;font-weight:500">{{k.name}}</div>
+              <div style="font-size:12px;font-weight:500;color:{{k.noteColor}}">{{k.note}}</div>
+            </a>
+          </sc-for>
+        </section>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const av = { M: ['MO', '#0F766E'], I: ['IP', '#7A3FC4'], S: ['SL', '#B4530A'], A: ['AC', '#2349C7'] };
+    const k = (id, name, who, note, opt = {}) => ({
+      id, name, note, av: av[who][0], avBg: av[who][1], noteColor: opt.warn ? '#A13A0B' : '#5B6572',
+      box: `display:flex;flex-direction:column;gap:8px;background:${opt.dark ? '#12161C' : '#fff'};color:${opt.dark ? '#fff' : '#12161C'};border:${opt.warn ? '1.5px solid #E0561F' : '1px solid #DDE2E8'};border-radius:10px;padding:12px;text-decoration:none;box-shadow:0 1px 2px rgba(18,22,28,.06)`,
+    });
+    const col = (title, dot, cards) => ({ title, dot, count: cards.length, cards });
+    return {
+      columns: [
+        col('TO DO', '#7A8594', [
+          k('T-6', 'QA on test environment', 'S', 'Waits on T-5'),
+          k('T-7', 'Release to prod', 'A', 'Waits on T-6'),
+          k('T-8', 'Ship auth service', 'A', 'Terminal node', { dark: true }),
+          k('T-9', 'Write press release', 'I', 'Part of, does not block'),
+          k('T-11', 'Update dependencies', 'M', 'Chore · weekly'),
+        ]),
+        col('IN PROGRESS', '#2F5BEA', [
+          k('T-3', 'Backend for storage', 'M', 'Blocks T-5'),
+          k('T-12', 'Write API contract tests', 'M', 'Blocks T-6'),
+        ]),
+        col('REVIEW', '#8A55E0', [k('T-4', 'Frontend on mocks', 'I', 'Blocks T-5')]),
+        col('BLOCKED', '#E0561F', [k('T-5', 'Integrate frontend and backend', 'A', 'Waits on T-3 and T-4', { warn: true })]),
+        col('DONE', '#1E9E63', [
+          k('T-1', 'Security sync call', 'A', 'Confirmed by Sofia'),
+          k('T-2', 'Deploy secure storage', 'S', 'Confirmed by Andrei'),
+          k('T-10', 'Threat model document', 'S', 'Confirmed by Andrei'),
+        ]),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

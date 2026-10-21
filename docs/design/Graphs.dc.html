@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Graphs home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="display:flex;min-height:900px;background:#F4F6F8">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <main style="flex:1;min-width:0;padding:32px 40px 48px;box-sizing:border-box;display:flex;flex-direction:column;gap:32px">
+    <header style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <h1 style="margin:0;font-size:30px;font-weight:600;letter-spacing:-0.02em">Graphs</h1>
+        <p style="margin:0;color:#5B6572;font-size:15px">Each graph is one goal and every task that leads to it.</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+        <label style="position:relative;display:block">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Search graphs</span>
+          <input type="search" placeholder="Search graphs" style="height:44px;width:240px;box-sizing:border-box;padding:0 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;background:#fff;color:#12161C">
+        </label>
+        <a href="EmptyGraph.dc.html" style="height:44px;padding:0 18px;border-radius:10px;background:#2349C7;color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;text-decoration:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New graph</a>
+      </div>
+    </header>
+
+    <section aria-labelledby="attn" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <h2 id="attn" style="margin:0;font-size:17px;font-weight:600">Waiting on you</h2>
+        <span style="font-size:14px;color:#5B6572">3 tasks are blocking someone else</span>
+      </div>
+      <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+        <sc-for list="{{waiting}}" as="w" hint-placeholder-count="3">
+          <li style="display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center;padding:12px 0;border-top:1px solid #E8EBEF">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6572;width:48px">{{w.id}}</span>
+            <a href="Task.dc.html" style="flex:1 1 260px;min-width:0;font-size:15px;font-weight:500;color:#12161C;text-decoration:none">{{w.name}}</a>
+            <span style="font-size:14px;color:#5B6572">{{w.graph}}</span>
+            <span style="font-size:13px;font-weight:500;padding:4px 10px;border-radius:999px;background:{{w.bg}};color:{{w.fg}}">{{w.status}}</span>
+            <span style="font-size:14px;color:#A13A0B;font-weight:500;min-width:110px;text-align:right">{{w.note}}</span>
+          </li>
+        </sc-for>
+      </ul>
+    </section>
+
+    <section aria-label="All graphs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px">
+      <sc-for list="{{graphs}}" as="g" hint-placeholder-count="4">
+        <a href="Graph.dc.html" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px;text-decoration:none;color:#12161C">
+          <svg viewBox="0 0 260 70" style="width:100%;height:70px" aria-hidden="true" fill="none">
+            <path d="M30 35 H80 M80 35 C100 35 100 15 120 15 H150 M80 35 C100 35 100 55 120 55 H150 M150 15 C170 15 170 35 190 35 M150 55 C170 55 170 35 190 35 M190 35 H226" stroke="#B9C1CB" stroke-width="2"/>
+            <circle cx="24" cy="35" r="7" fill="{{g.color}}"/><circle cx="80" cy="35" r="7" fill="{{g.color}}"/><circle cx="120" cy="15" r="7" fill="{{g.color}}" opacity="0.7"/><circle cx="120" cy="55" r="7" fill="{{g.color}}" opacity="0.7"/><circle cx="150" cy="15" r="7" fill="#fff" stroke="#8995A5" stroke-width="2"/><circle cx="150" cy="55" r="7" fill="#fff" stroke="#8995A5" stroke-width="2"/><circle cx="190" cy="35" r="7" fill="#fff" stroke="#8995A5" stroke-width="2"/><rect x="226" y="26" width="26" height="18" rx="6" fill="#12161C"/>
+          </svg>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:18px;font-weight:600">{{g.name}}</div>
+            <div style="font-size:14px;color:#5B6572">Goal: {{g.goal}}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#3E4753"><span>{{g.done}} of {{g.total}} done</span><span>{{g.pct}}%</span></div>
+            <div style="height:6px;border-radius:3px;background:#E8EBEF;overflow:hidden"><div style="height:100%;width:{{g.pct}}%;background:{{g.color}}"></div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;font-weight:500;padding:4px 10px;border-radius:999px;background:{{g.badgeBg}};color:{{g.badgeFg}}">{{g.badge}}</span>
+            <span style="font-size:13px;color:#5B6572">{{g.updated}}</span>
+          </div>
+        </a>
+      </sc-for>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = {
+      TODO: ['#E8EBEF', '#3E4753'], IN_PROGRESS: ['#DCE8FF', '#1B3FA8'], REVIEW: ['#EADFFB', '#5A2BA6'],
+      DONE: ['#D5F0E3', '#0F5C3A'], BLOCKED: ['#FFE1D3', '#A13A0B'],
+    };
+    const w = (id, name, graph, status, note) => ({ id, name, graph, status: status.replace('_', ' '), bg: st[status][0], fg: st[status][1], note });
+    const ok = ['#D5F0E3', '#0F5C3A'], warn = ['#FFE1D3', '#A13A0B'];
+    const g = (name, goal, done, total, color, bad, badge, updated) => ({
+      name, goal, done, total, color, pct: Math.round((done / total) * 100),
+      badge, badgeBg: (bad ? warn : ok)[0], badgeFg: (bad ? warn : ok)[1], updated,
+    });
+    return {
+      waiting: [
+        w('T-4', 'Review frontend on mocks', 'Auth service', 'REVIEW', 'Blocks T-5'),
+        w('T-31', 'Approve storage failover plan', 'Platform storage', 'REVIEW', 'Blocks 2 tasks'),
+        w('T-57', 'Pick pricing experiment', 'Q4 growth', 'TODO', 'Blocks 3 tasks'),
+      ],
+      graphs: [
+        g('Auth service', 'Ship auth service', 5, 12, '#2349C7', true, '2 blocked', 'Updated 12 min ago'),
+        g('Platform storage', 'Zero-downtime failover', 12, 18, '#0F766E', false, 'On track', 'Updated yesterday'),
+        g('Q4 growth', 'Reach 50k active users', 5, 24, '#7A3FC4', true, '5 blocked', 'Updated 2 h ago'),
+        g('Security audit', 'Pass external audit', 8, 9, '#B4530A', false, 'On track', 'Updated 3 days ago'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

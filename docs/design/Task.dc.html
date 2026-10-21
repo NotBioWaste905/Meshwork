@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Task view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input,textarea{font-family:inherit}
+a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="display:flex;min-height:1100px;background:#F4F6F8">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="min-height:60px;background:#fff;border-bottom:1px solid #DDE2E8;display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding:8px 32px;box-sizing:border-box">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:15px">
+        <a href="Graphs.dc.html" style="color:#5B6572;text-decoration:none">Graphs</a><span style="color:#8995A5">/</span>
+        <a href="Graph.dc.html" style="color:#5B6572;text-decoration:none">Auth service</a><span style="color:#8995A5">/</span>
+        <strong style="font-weight:600;font-family:'IBM Plex Mono',monospace;font-size:14px">T-5</strong>
+      </div>
+      <div style="flex:1"></div>
+      <a href="Graph.dc.html" style="height:40px;padding:0 16px;border-radius:10px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Show in graph</a>
+      <button style="height:40px;padding:0 16px;border-radius:10px;border:1px solid #B9C1CB;background:#fff;color:#A13A0B;font-size:14px;font-weight:500">Delete</button>
+    </header>
+
+    <div style="display:flex;flex-wrap:wrap;gap:32px;padding:32px;box-sizing:border-box;align-items:flex-start">
+      <main style="flex:3 1 560px;min-width:0;display:flex;flex-direction:column;gap:28px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;background:#FFE1D3;color:#A13A0B;font-size:13px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:#E0561F"></span>BLOCKED</span>
+          <h1 style="margin:0;font-size:32px;line-height:1.2;font-weight:600;letter-spacing:-0.02em">Integrate frontend and backend</h1>
+          <p style="margin:0;font-size:16px;line-height:1.6;color:#2B333D;max-width:68ch">Wire the mocked frontend to the real storage API. Replace the fixtures with calls through the typed client, then run the contract tests against the test environment build. Done when the login flow works end to end on staging data.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <span style="height:26px;padding:0 10px;border-radius:6px;background:#E8EBEF;color:#3E4753;font-size:13px;display:inline-flex;align-items:center">integration</span>
+            <span style="height:26px;padding:0 10px;border-radius:6px;background:#E8EBEF;color:#3E4753;font-size:13px;display:inline-flex;align-items:center">auth</span>
+            <span style="height:26px;padding:0 10px;border-radius:6px;background:#E8EBEF;color:#3E4753;font-size:13px;display:inline-flex;align-items:center">frontend</span>
+          </div>
+        </div>
+
+        <section aria-labelledby="deps" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px 24px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <h2 id="deps" style="margin:0;font-size:17px;font-weight:600">Blocked by</h2>
+            <span style="font-size:13px;color:#5B6572">All must be done before this can start</span>
+          </div>
+          <ul style="list-style:none;margin:0;padding:0">
+            <sc-for list="{{blockers}}" as="b" hint-placeholder-count="2">
+              <li style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 0;border-top:1px solid #E8EBEF">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6572;width:44px">{{b.id}}</span>
+                <a href="Task.dc.html" style="flex:1 1 200px;min-width:0;font-size:15px;font-weight:500;color:#12161C;text-decoration:none">{{b.name}}</a>
+                <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:{{b.bg}};color:{{b.fg}}">{{b.status}}</span>
+                <span style="width:26px;height:26px;border-radius:50%;background:{{b.avBg}};color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center">{{b.av}}</span>
+              </li>
+            </sc-for>
+          </ul>
+          <button style="align-self:flex-start;height:36px;padding:0 14px;border-radius:8px;border:1px dashed #8995A5;background:#fff;color:#2349C7;font-size:14px;font-weight:500;margin-top:4px">+ Add blocker</button>
+        </section>
+
+        <section aria-labelledby="blocks" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px 24px;display:flex;flex-direction:column;gap:8px">
+          <h2 id="blocks" style="margin:0;font-size:17px;font-weight:600">Blocks</h2>
+          <ul style="list-style:none;margin:0;padding:0">
+            <sc-for list="{{blocked}}" as="b" hint-placeholder-count="1">
+              <li style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 0;border-top:1px solid #E8EBEF">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6572;width:44px">{{b.id}}</span>
+                <a href="Task.dc.html" style="flex:1 1 200px;min-width:0;font-size:15px;font-weight:500;color:#12161C;text-decoration:none">{{b.name}}</a>
+                <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:{{b.bg}};color:{{b.fg}}">{{b.status}}</span>
+                <span style="width:26px;height:26px;border-radius:50%;background:{{b.avBg}};color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center">{{b.av}}</span>
+              </li>
+            </sc-for>
+          </ul>
+        </section>
+
+        <section aria-labelledby="ver" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+          <h2 id="ver" style="margin:0;font-size:17px;font-weight:600">Verification</h2>
+          <p style="margin:0;font-size:15px;line-height:1.55;color:#3E4753">This task closes only after Sofia Lindqvist confirms the result. Marking it as done yourself is not enough.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:12px">
+            <button disabled style="height:44px;padding:0 18px;border-radius:10px;border:0;background:#E8EBEF;color:#5B6572;font-size:15px;font-weight:600">Send to review</button>
+            <span style="align-self:center;font-size:14px;color:#A13A0B">Available once T-3 and T-4 are done</span>
+          </div>
+        </section>
+
+        <section aria-labelledby="act" style="display:flex;flex-direction:column;gap:16px">
+          <h2 id="act" style="margin:0;font-size:17px;font-weight:600">Activity</h2>
+          <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+            <sc-for list="{{activity}}" as="a" hint-placeholder-count="5">
+              <li style="display:flex;gap:14px;padding-bottom:18px">
+                <div style="display:flex;flex-direction:column;align-items:center">
+                  <span style="width:28px;height:28px;border-radius:50%;background:{{a.avBg}};color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none">{{a.av}}</span>
+                  <span style="flex:1;width:2px;background:#DDE2E8;margin-top:6px"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                  <div style="font-size:15px;line-height:1.45"><strong style="font-weight:600">{{a.who}}</strong> {{a.what}}</div>
+                  <div style="font-size:13px;color:#5B6572">{{a.when}}</div>
+                </div>
+              </li>
+            </sc-for>
+          </ol>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label for="cmt" style="font-size:14px;font-weight:500">Add a comment</label>
+            <textarea id="cmt" rows="3" placeholder="Write a note for the team" style="padding:12px 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;resize:vertical;background:#fff;color:#12161C"></textarea>
+            <button style="align-self:flex-end;height:40px;padding:0 18px;border-radius:10px;border:0;background:#2349C7;color:#fff;font-size:14px;font-weight:600">Comment</button>
+          </div>
+        </section>
+      </main>
+
+      <aside style="flex:1 1 300px;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:20px">
+        <section aria-labelledby="det" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px">
+          <h2 id="det" style="margin:0;font-size:15px;font-weight:600">Details</h2>
+          <dl style="margin:0;display:grid;grid-template-columns:100px minmax(0,1fr);gap:14px 12px;font-size:14px;align-items:center">
+            <dt style="color:#5B6572">Status</dt>
+            <dd style="margin:0"><button style="height:32px;padding:0 12px;border-radius:8px;border:1px solid #B9C1CB;background:#fff;font-size:14px;font-weight:500;color:#12161C">Blocked ▾</button></dd>
+            <dt style="color:#5B6572">Assignee</dt>
+            <dd style="margin:0;display:flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:50%;background:#2349C7;color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">AC</span>Andrei Chirkin</dd>
+            <dt style="color:#5B6572">Reviewer</dt>
+            <dd style="margin:0;display:flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:50%;background:#B4530A;color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">SL</span>Sofia Lindqvist</dd>
+            <dt style="color:#5B6572">Graph</dt>
+            <dd style="margin:0"><a href="Graph.dc.html">Auth service</a></dd>
+            <dt style="color:#5B6572">Type</dt>
+            <dd style="margin:0">Task</dd>
+            <dt style="color:#5B6572">Created</dt>
+            <dd style="margin:0">Oct 14, by Andrei</dd>
+          </dl>
+        </section>
+
+        <section aria-labelledby="nb" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px">
+          <h2 id="nb" style="margin:0;font-size:15px;font-weight:600">Neighborhood</h2>
+          <svg viewBox="0 0 280 170" style="width:100%;height:auto" role="img" aria-label="T-3 and T-4 lead to T-5, which leads to T-6" fill="none">
+            <defs><marker id="nm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6B7684"/></marker></defs>
+            <g stroke="#6B7684" stroke-width="1.75" marker-end="url(#nm)"><path d="M82 40 C110 40 110 85 128 85"/><path d="M82 130 C110 130 110 85 128 85"/><path d="M198 85 L214 85"/></g>
+            <g font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="500">
+              <rect x="6" y="22" width="76" height="36" rx="8" fill="#fff" stroke="#C9D0D8"/><circle cx="18" cy="40" r="4" fill="#2F5BEA"/><text x="27" y="44" fill="#12161C">T-3</text>
+              <rect x="6" y="112" width="76" height="36" rx="8" fill="#fff" stroke="#C9D0D8"/><circle cx="18" cy="130" r="4" fill="#8A55E0"/><text x="27" y="134" fill="#12161C">T-4</text>
+              <rect x="128" y="67" width="70" height="36" rx="8" fill="#fff" stroke="#2349C7" stroke-width="2"/><circle cx="140" cy="85" r="4" fill="#E0561F"/><text x="149" y="89" fill="#12161C">T-5</text>
+              <rect x="214" y="67" width="60" height="36" rx="8" fill="#fff" stroke="#C9D0D8"/><circle cx="226" cy="85" r="4" fill="#7A8594"/><text x="235" y="89" fill="#12161C">T-6</text>
+            </g>
+          </svg>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = {
+      TODO: ['#E8EBEF', '#3E4753'], IN_PROGRESS: ['#DCE8FF', '#1B3FA8'], REVIEW: ['#EADFFB', '#5A2BA6'],
+      DONE: ['#D5F0E3', '#0F5C3A'], BLOCKED: ['#FFE1D3', '#A13A0B'],
+    };
+    const av = { M: ['MO', '#0F766E'], I: ['IP', '#7A3FC4'], S: ['SL', '#B4530A'], A: ['AC', '#2349C7'] };
+    const t = (id, name, status, who) => ({ id, name, status: status.replace('_', ' '), bg: st[status][0], fg: st[status][1], av: av[who][0], avBg: av[who][1] });
+    const a = (who, what, when, k) => ({ who, what, when, av: av[k][0], avBg: av[k][1] });
+    return {
+      blockers: [t('T-3', 'Backend for storage', 'IN_PROGRESS', 'M'), t('T-4', 'Frontend on mocks', 'REVIEW', 'I')],
+      blocked: [t('T-6', 'QA on test environment', 'TODO', 'S')],
+      activity: [
+        a('Ilya Petrov', 'moved T-4 to Review', 'Today, 10:42', 'I'),
+        a('Andrei Chirkin', 'changed status from To do to Blocked', 'Yesterday, 17:05', 'A'),
+        a('Andrei Chirkin', 'added T-3 as a blocker', 'Oct 15, 11:20', 'A'),
+        a('Andrei Chirkin', 'assigned Sofia Lindqvist as reviewer', 'Oct 14, 16:48', 'A'),
+        a('Andrei Chirkin', 'created this task', 'Oct 14, 16:41', 'A'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
