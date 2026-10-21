@@ -17,3 +17,8 @@ export type TaskFlowEdge = Edge;
 
 export const NODE_WIDTH = 160;
 export const NODE_HEIGHT = 88;
+
+/** What the canvas context menu was opened on, at client (screen) coordinates. */
+export type MenuTarget =
+	| { kind: 'pane'; x: number; y: number }
+	| { kind: 'node'; x: number; y: number; id: string };
