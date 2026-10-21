@@ -27,6 +27,15 @@ export type NewTask = Pick<Task, 'name'> &
 /** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
 export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id'>>;
 
+/** Graph metadata with task counters. `name` is the goal; empty for graphs created without one. */
+export type Graph = {
+	id: string;
+	name: string;
+	task_count: number;
+	done_count: number;
+	blocked_count: number;
+};
+
 export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export class ApiError extends Error {
@@ -60,8 +69,21 @@ export class MeshworkAPI {
 	}
 
 	// Graph operations
-	createGraph(): Promise<{ ID: string }> {
-		return this.request('POST', '/v0/create_graph');
+	createGraph(name?: string): Promise<{ ID: string; name: string }> {
+		return this.request('POST', '/v0/create_graph', name === undefined ? undefined : { name });
+	}
+
+	/** All graphs, newest first. */
+	listGraphs(): Promise<Graph[]> {
+		return this.request('GET', '/v0/graphs');
+	}
+
+	getGraph(graphId: string): Promise<Graph> {
+		return this.request('GET', `/v0/${graphId}`);
+	}
+
+	renameGraph(graphId: string, name: string): Promise<Graph> {
+		return this.request('PUT', `/v0/${graphId}`, { name });
 	}
 
 	// Task operations

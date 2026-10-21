@@ -2,7 +2,6 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import TopBar from '$lib/components/TopBar.svelte';
-	import { rememberKnownGraph } from '$lib/graphStore.svelte';
 	import { LAST_GRAPH_KEY } from '../../graph/lastGraph';
 
 	let goal = $state('');
@@ -15,10 +14,9 @@
 		saving = true;
 		error = '';
 		try {
-			const { ID } = await api.createGraph();
-			// The goal becomes the first task: tasks that depend on nothing yet hang off it later.
+			const { ID } = await api.createGraph(goal.trim());
+			// The goal also becomes the first task: tasks that depend on nothing yet hang off it later.
 			await api.addTask(ID, { name: goal.trim() });
-			rememberKnownGraph(ID);
 			try {
 				localStorage.setItem(LAST_GRAPH_KEY, ID);
 			} catch {

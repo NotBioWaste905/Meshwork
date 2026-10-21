@@ -82,10 +82,36 @@ pub struct ConnectNodesRequest {
     pub node_dependee: String,
 }
 
+/// Request body for creating a graph. The body itself is optional.
+#[derive(Deserialize, Debug, Default)]
+pub struct NewGraph {
+    /// The goal the graph leads to; empty when not given.
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Request body for editing a graph. Omitted fields are left unchanged.
+#[derive(Deserialize, Debug, Default)]
+pub struct GraphUpdate {
+    pub name: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CreateGraphResponse {
     #[serde(rename = "ID")]
     pub id: String,
+    pub name: String,
+}
+
+/// Graph metadata with task counters, as returned by `GET /v0/graphs` and `GET /v0/:graph`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct GraphInfo {
+    pub id: String,
+    /// Empty for graphs created before graphs had names.
+    pub name: String,
+    pub task_count: i64,
+    pub done_count: i64,
+    pub blocked_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

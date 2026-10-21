@@ -2,8 +2,6 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
-@plugin 'flowbite/plugin';
-
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme static {
@@ -50,22 +48,7 @@
 	--color-st-blocked-bg: #ffe1d3;
 	--color-st-blocked-fg: #a13a0b;
 	--color-st-blocked-dot: #e0561f;
-
-	/* flowbite components still read the primary scale; point it at the accent */
-	--color-primary-50: #eef3ff;
-	--color-primary-100: #dce8ff;
-	--color-primary-200: #bcd0ff;
-	--color-primary-300: #93b0fb;
-	--color-primary-400: #6c8cf5;
-	--color-primary-500: #2f5bea;
-	--color-primary-600: #2349c7;
-	--color-primary-700: #1a3694;
-	--color-primary-800: #162d7a;
-	--color-primary-900: #11235e;
 }
-
-@source "../node_modules/flowbite-svelte/dist";
-@source "../node_modules/flowbite-svelte-icons/dist";
 
 @layer base {
 	body {
