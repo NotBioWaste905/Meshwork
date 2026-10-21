@@ -436,3 +436,98 @@ async fn ready_tasks_follow_dependencies() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn graph_metadata_and_listing() {
+    let app = TestApp::new().await;
+
+    // No body, an empty JSON object and a named graph are all accepted.
+    let unnamed = app.create_graph().await;
+    // `created_at` has millisecond resolution; keep the creation order unambiguous.
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    let (status, body) = app
+        .call(Method::POST, "/v0/create_graph", Some(json!({})))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["name"], json!(""));
+    let empty_obj = body["ID"].as_str().unwrap().to_string();
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    let (status, body) = app
+        .call(
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "  Ship billing  " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["name"], json!("Ship billing"));
+    let named = body["ID"].as_str().unwrap().to_string();
+
+    let (status, body) = app
+        .call(Method::POST, "/v0/create_graph", Some(json!("nope")))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let a = app.add_task(&named, json!({ "name": "A" })).await;
+    let b = app
+        .add_task(&named, json!({ "name": "B", "status": "DONE" }))
+        .await;
+    app.add_task(
+        &named,
+        json!({ "name": "C", "status": "BLOCKED", "depends_on": [a.id, b.id] }),
+    )
+    .await;
+
+    let (status, body) = app.call(Method::GET, &format!("/v0/{named}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        json!({
+            "id": named, "name": "Ship billing",
+            "task_count": 3, "done_count": 1, "blocked_count": 1
+        })
+    );
+
+    let (status, body) = app.call(Method::GET, "/v0/graphs", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let graphs = body.as_array().unwrap();
+    assert_eq!(graphs.len(), 3);
+    // Newest first.
+    assert_eq!(graphs[0]["id"], json!(named));
+    assert_eq!(graphs[1]["id"], json!(empty_obj));
+    assert_eq!(graphs[2]["id"], json!(unnamed));
+    assert_eq!(graphs[2]["name"], json!(""));
+    assert_eq!(graphs[2]["task_count"], json!(0));
+    assert_eq!(graphs[2]["done_count"], json!(0));
+
+    // Rename; a blank name is rejected and leaves the old one.
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{unnamed}"),
+            Some(json!({ "name": "Launch" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["name"], json!("Launch"));
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{unnamed}"),
+            Some(json!({ "name": "  " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (_, body) = app.call(Method::GET, &format!("/v0/{unnamed}"), None).await;
+    assert_eq!(body["name"], json!("Launch"));
+
+    let (status, _) = app.call(Method::GET, "/v0/missing", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(Method::PUT, "/v0/missing", Some(json!({ "name": "X" })))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    app.cleanup().await;
+}
