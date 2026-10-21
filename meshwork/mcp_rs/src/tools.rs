@@ -31,10 +31,7 @@ impl Meshwork {
 /// Tool outcome: errors go back to the model as `isError` results so it can react.
 fn respond<T: Serialize>(res: Result<T, String>) -> Result<CallToolResult, ErrorData> {
     Ok(match res {
-        Ok(v) => match ContentBlock::json(v) {
-            Ok(c) => CallToolResult::success(vec![c]),
-            Err(e) => return Err(e),
-        },
+        Ok(v) => CallToolResult::success(vec![ContentBlock::json(v)?]),
         Err(msg) => CallToolResult::error(vec![ContentBlock::text(msg)]),
     })
 }
