@@ -81,7 +81,7 @@
 ## Гигиена репо
 
 - [ ] Удалить `meshwork/backend/` (legacy Python), когда Rust догонит функциональность; до тех пор — не трогать
-- [ ] README: актуализировать (стек, порты, фронт на :3000, убрать обещания про автоматизацию как фичи)
+- [x] README: стек, запуск, API, процесс работы с ветками
 - [x] CI: `dtolnay/rust-toolchain`, `checkout@v4`, fmt/clippy, `rust-cache`, запуск на `main`/`dev` и PR в них
 - [x] CI для фронта: check, lint, build
 - [x] `falkordb/falkordb` запинен (v4.22.2)
