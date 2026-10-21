@@ -5,10 +5,10 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-use neo4rs::*;
+use falkordb::{AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 use uuid::Uuid;
@@ -17,7 +17,7 @@ mod schemas;
 // Custom error types
 #[derive(Debug)]
 enum AppError {
-    Database(neo4rs::Error),
+    Database(String),
     NotFound(String),
     BadRequest(String),
     Internal(String),
@@ -56,7 +56,11 @@ type Result<T> = std::result::Result<T, AppError>;
 // Application state
 #[derive(Clone)]
 struct AppState {
-    graph: Arc<Graph>,
+    graph: AsyncGraph,
+}
+
+fn db_err<E: std::fmt::Display>(e: E) -> AppError {
+    AppError::Database(e.to_string())
 }
 
 #[tokio::main]
@@ -69,26 +73,35 @@ async fn main() {
 
     info!("Starting Meshwork Backend Server");
 
-    // Build the router
-    let uri = "neo4j:7687";
-    let user = "neo4j";
-    let pass = "your_password";
+    let uri = std::env::var("FALKORDB_URL").unwrap_or_else(|_| "falkor://falkordb:6379".to_string());
+    let graph_name = std::env::var("FALKORDB_GRAPH").unwrap_or_else(|_| "meshwork".to_string());
 
-    info!("Attempting to connect to Neo4j at {}", uri);
-    let graph = match Graph::new(uri, user, pass).await {
-        Ok(graph) => {
-            info!("Successfully connected to Neo4j");
-            graph
+    info!("Attempting to connect to FalkorDB at {}", uri);
+    let connection_info: FalkorConnectionInfo = match uri.as_str().try_into() {
+        Ok(info) => info,
+        Err(e) => {
+            error!("Invalid FALKORDB_URL '{}': {}", uri, e);
+            std::process::exit(1);
+        }
+    };
+    let client: FalkorAsyncClient = match FalkorClientBuilder::new_async()
+        .with_connection_info(connection_info)
+        .build()
+        .await
+    {
+        Ok(client) => {
+            info!("Successfully connected to FalkorDB");
+            client
         }
         Err(e) => {
-            error!("Failed to connect to Neo4j: {}", e);
-            error!("Make sure Neo4j service is running and accessible");
+            error!("Failed to connect to FalkorDB: {}", e);
+            error!("Make sure FalkorDB service is running and accessible");
             std::process::exit(1);
         }
     };
 
     let state = AppState {
-        graph: Arc::new(graph),
+        graph: client.select_graph(graph_name),
     };
 
     let app = Router::new()
@@ -153,19 +166,20 @@ async fn create_graph(State(state): State<AppState>) -> Result<Json<CreateGraphR
     let id = Uuid::new_v4().to_string();
     info!("Creating new graph with ID: {}", id);
 
-    let mut txn = state.graph.start_txn().await.map_err(AppError::Database)?;
-
-    let q = "CREATE (n:Graph {id: $id}) RETURN n";
-    txn.run(query(q).param("id", id.clone()))
+    let mut graph = state.graph.clone();
+    graph
+        .query("CREATE (:Graph {id: $id})")
+        .with_param("id", id.clone())
+        .execute()
         .await
-        .map_err(AppError::Database)?;
-
-    txn.commit().await.map_err(AppError::Database)?;
+        .map_err(db_err)?;
 
     info!("Graph created successfully with ID: {}", id);
     Ok(Json(CreateGraphResponse { id }))
 }
 
+// NOTE: FalkorDB has no multi-query transactions, so every statement below is
+// atomic on its own but the handler as a whole is not.
 async fn add_task(
     State(state): State<AppState>,
     axum::extract::Path(graph_id): axum::extract::Path<String>,
@@ -183,57 +197,55 @@ async fn add_task(
         ));
     }
 
-    let mut txn = state.graph.start_txn().await.map_err(AppError::Database)?;
+    let mut graph = state.graph.clone();
 
-    // Create the task
-    let q = "CREATE (t:Task {id: $id, name: $name, description: $description, status: $status}) RETURN t";
-    txn.run(
-        query(q)
-            .param("id", task.id.clone())
-            .param("name", task.name.clone())
-            .param("description", task.description.clone())
-            .param("status", format!("{:?}", task.status)),
-    )
-    .await
-    .map_err(AppError::Database)?;
-
-    // Link task to graph
-    let q = "MATCH (t:Task {id: $id}), (g:Graph {id: $graph_id}) CREATE (t)-[rel:PART_OF]->(g) RETURN t";
-    txn.run(
-        query(q)
-            .param("id", task.id.clone())
-            .param("graph_id", graph_id.clone()),
-    )
-    .await
-    .map_err(AppError::Database)?;
+    // Create the task and link it to the graph in one statement; if the graph
+    // doesn't exist the MATCH yields no rows and nothing is created.
+    let q = "MATCH (g:Graph {id: $graph_id}) \
+             CREATE (t:Task {id: $id, name: $name, description: $description, status: $status})-[:PART_OF]->(g) \
+             RETURN t.id";
+    let mut result = graph
+        .query(q)
+        .with_params([
+            ("graph_id", graph_id.as_str()),
+            ("id", task.id.as_str()),
+            ("name", task.name.as_str()),
+            ("description", task.description.as_str()),
+            ("status", &format!("{:?}", task.status)),
+        ])
+        .execute()
+        .await
+        .map_err(db_err)?;
+    if result.data.next().await.is_none() {
+        return Err(AppError::NotFound(format!("Graph {} not found", graph_id)));
+    }
 
     // Create dependencies
     for dependency in &task.depends_on {
         info!("Adding dependency: {} -> {}", task.id, dependency);
-        let q = "MATCH (t:Task {id: $id}), (dep_task:Task {id: $dependency_id}) CREATE (t)-[rel:DEPENDS_ON]->(dep_task) RETURN t";
-        txn.run(
-            query(q)
-                .param("id", task.id.clone())
-                .param("dependency_id", dependency.clone()),
-        )
-        .await
-        .map_err(AppError::Database)?;
+        let q = "MATCH (t:Task {id: $id}), (dep_task:Task {id: $dependency_id}) \
+                 CREATE (t)-[:DEPENDS_ON]->(dep_task)";
+        graph
+            .query(q)
+            .with_params([("id", task.id.as_str()), ("dependency_id", dependency.as_str())])
+            .execute()
+            .await
+            .map_err(db_err)?;
     }
 
     // Assign users
     for user in &task.users {
         info!("Assigning user '{}' to task '{}'", user, task.id);
-        let q = "MERGE (user:User {id: $user_id}) WITH user MATCH (t:Task {id: $id}) CREATE (t)-[rel:ASSIGNED_TO]->(user) RETURN t";
-        txn.run(
-            query(q)
-                .param("id", task.id.clone())
-                .param("user_id", user.clone()),
-        )
-        .await
-        .map_err(AppError::Database)?;
+        let q = "MATCH (t:Task {id: $id}) \
+                 MERGE (u:User {id: $user_id}) \
+                 CREATE (t)-[:ASSIGNED_TO]->(u)";
+        graph
+            .query(q)
+            .with_params([("id", task.id.as_str()), ("user_id", user.as_str())])
+            .execute()
+            .await
+            .map_err(db_err)?;
     }
-
-    txn.commit().await.map_err(AppError::Database)?;
 
     info!(
         "Task '{}' added successfully to graph '{}'",
@@ -254,41 +266,38 @@ async fn get_all_tasks(
         return Err(AppError::BadRequest("Graph ID cannot be empty".to_string()));
     }
 
-    let q = r#"
-        MATCH (t:Task)-[:PART_OF]->(g:Graph {id: $id})
-        OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task)
-        OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:User)
-        RETURN t,
-               collect(DISTINCT dep.id) as dependencies,
-               collect(DISTINCT u.id) as users
-    "#;
+    let q = "MATCH (t:Task)-[:PART_OF]->(g:Graph {id: $id}) \
+             OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
+             OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:User) \
+             RETURN t.id AS id, t.name AS name, t.description AS description, t.status AS status, \
+                    collect(DISTINCT dep.id) AS dependencies, \
+                    collect(DISTINCT u.id) AS users";
 
-    let mut result = state
-        .graph
-        .execute(query(q).param("id", graph_id.clone()))
+    let mut graph = state.graph.clone();
+    let mut result = graph
+        .query(q)
+        .with_param("id", graph_id.clone())
+        .execute()
         .await
-        .map_err(AppError::Database)?;
+        .map_err(db_err)?;
 
     let mut tasks = Vec::new();
 
-    while let Ok(Some(record)) = result.next().await {
-        let node: neo4rs::Node = record.get("t").unwrap();
-        let dependencies: Vec<String> = record.get("dependencies").unwrap_or_default();
-        let users: Vec<String> = record.get("users").unwrap_or_default();
+    while let Some(row) = result.data.next().await {
+        let row = row.map_err(db_err)?;
+        let status: String = row.try_get("status").map_err(db_err)?;
 
-        let task = schemas::Task {
-            id: node.get("id").unwrap(),
-            name: node.get("name").unwrap(),
-            description: node.get("description").unwrap(),
-            status: serde_json::from_str(&format!("\"{}\"", node.get::<String>("status").unwrap()))
-                .unwrap(),
-            depends_on: dependencies,
-            users,
+        tasks.push(schemas::Task {
+            id: row.try_get("id").map_err(db_err)?,
+            name: row.try_get("name").map_err(db_err)?,
+            description: row.try_get("description").map_err(db_err)?,
+            status: serde_json::from_str(&format!("\"{}\"", status))
+                .map_err(|e| AppError::Internal(format!("Bad status '{}': {}", status, e)))?,
+            depends_on: row.try_get("dependencies").map_err(db_err)?,
+            users: row.try_get("users").map_err(db_err)?,
             tags: vec![], // You'll need to handle tags similarly if you use them
             graph_id: graph_id.clone(),
-        };
-
-        tasks.push(task);
+        });
     }
 
     Ok(Json(tasks))

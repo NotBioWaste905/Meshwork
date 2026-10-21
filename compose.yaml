@@ -2,27 +2,29 @@ name: meshwork
 services:
   backend:
     build: ./meshwork/backend_rs
+    environment:
+      - FALKORDB_URL=falkor://falkordb:6379
     ports:
       - "8000:8000"
+    depends_on:
+      - falkordb
   frontend:
     build: ./meshwork/frontend/webapp
     ports:
       - "3000:3000"
     depends_on:
       - backend
-  neo4j:
-    image: neo4j:latest
+  falkordb:
+    image: falkordb/falkordb:latest
     volumes:
-      - /$HOME/neo4j/logs:/logs
-      - /$HOME/neo4j/config:/config
-      - /$HOME/neo4j/data:/data
-      - /$HOME/neo4j/plugins:/plugins
-    environment:
-      - NEO4J_AUTH=neo4j/your_password
+      - falkordb_data:/var/lib/falkordb/data
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "6379:6379" # Redis protocol (backend)
+      - "3001:3000" # FalkorDB browser UI (3000 is taken by the frontend)
     restart: always
+
+volumes:
+  falkordb_data:
 
 networks:
   default:
