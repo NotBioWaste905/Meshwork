@@ -13,10 +13,16 @@ use axum::{
     http::{header, Method, Request, StatusCode},
     Router,
 };
-use backend_rs::{app, cors_layer, schemas::Task, AppState};
-use falkordb::{AsyncGraph, FalkorClientBuilder, FalkorConnectionInfo};
+use backend_rs::{app, connection, cors_layer, schemas::Task, AppState};
+use falkordb::AsyncGraph;
 use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
+use tokio::{net::TcpListener, task::JoinHandle};
 use tower::ServiceExt;
+
+fn falkordb_url() -> String {
+    std::env::var("FALKORDB_URL").unwrap_or_else(|_| "falkor://localhost:6379".to_string())
+}
 
 struct TestApp {
     router: Router,
@@ -25,15 +31,17 @@ struct TestApp {
 
 impl TestApp {
     async fn new() -> Self {
-        let uri =
-            std::env::var("FALKORDB_URL").unwrap_or_else(|_| "falkor://localhost:6379".to_string());
-        let info: FalkorConnectionInfo = uri.as_str().try_into().expect("bad FALKORDB_URL");
-        let client = FalkorClientBuilder::new_async()
-            .with_connection_info(info)
-            .build()
+        Self::with_url(&falkordb_url()).await
+    }
+
+    async fn with_url(uri: &str) -> Self {
+        let client = connection::connect(uri)
             .await
             .expect("FalkorDB is not reachable");
-        let graph = client.select_graph(format!("test_{}", uuid::Uuid::new_v4().simple()));
+        let mut graph = client.select_graph(format!("test_{}", uuid::Uuid::new_v4().simple()));
+        connection::ensure_indexes(&mut graph)
+            .await
+            .expect("cannot create indexes");
         let state = AppState {
             graph: graph.clone(),
         };
@@ -434,5 +442,81 @@ async fn ready_tasks_follow_dependencies() {
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+    app.cleanup().await;
+}
+
+/// A TCP proxy in front of FalkorDB whose connections can be cut on demand,
+/// which looks to the client exactly like a FalkorDB restart.
+struct CuttableProxy {
+    port: u16,
+    conns: Arc<Mutex<Vec<JoinHandle<()>>>>,
+}
+
+impl CuttableProxy {
+    async fn start(upstream: String) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let conns: Arc<Mutex<Vec<JoinHandle<()>>>> = Arc::default();
+        let registry = conns.clone();
+        tokio::spawn(async move {
+            while let Ok((mut client, _)) = listener.accept().await {
+                let upstream = upstream.clone();
+                let handle = tokio::spawn(async move {
+                    if let Ok(mut server) = tokio::net::TcpStream::connect(upstream).await {
+                        let _ = tokio::io::copy_bidirectional(&mut client, &mut server).await;
+                    }
+                });
+                registry.lock().unwrap().push(handle);
+            }
+        });
+        CuttableProxy { port, conns }
+    }
+
+    /// Drops every proxied connection; new ones are still accepted.
+    fn cut(&self) {
+        for handle in self.conns.lock().unwrap().drain(..) {
+            handle.abort();
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn recovers_after_connection_loss() {
+    let upstream = falkordb_url()
+        .split("://")
+        .last()
+        .unwrap()
+        .trim_end_matches('/')
+        .to_string();
+    let proxy = CuttableProxy::start(upstream).await;
+    let app = TestApp::with_url(&format!("falkor://127.0.0.1:{}", proxy.port)).await;
+    let graph_id = app.create_graph().await;
+    let before = app.add_task(&graph_id, json!({ "name": "Before" })).await;
+
+    // A write right after the drop must not fail and must not be applied twice.
+    proxy.cut();
+    let after = app.add_task(&graph_id, json!({ "name": "After" })).await;
+
+    proxy.cut();
+    let mut ids: Vec<String> = app
+        .all_tasks(&graph_id)
+        .await
+        .into_iter()
+        .map(|t| t.id)
+        .collect();
+    ids.sort();
+    let mut expected = vec![before.id, after.id];
+    expected.sort();
+    assert_eq!(ids, expected);
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn ensure_indexes_is_idempotent() {
+    let mut app = TestApp::new().await;
+    // `TestApp::new` already created them once.
+    connection::ensure_indexes(&mut app.graph).await.unwrap();
     app.cleanup().await;
 }
