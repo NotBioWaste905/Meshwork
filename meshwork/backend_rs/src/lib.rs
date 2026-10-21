@@ -2,7 +2,7 @@
 #![recursion_limit = "256"]
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderValue, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 mod db;
 pub mod error;
+pub mod frontier;
 pub mod schemas;
 
 use error::{AppError, Result};
@@ -51,6 +52,7 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/:graph_id/task/add/", post(add_task))
         .route("/v0/:graph_id/all_tasks", get(get_all_tasks))
+        .route("/v0/:graph_id/ready_tasks", get(get_ready_tasks))
         .route(
             "/v0/:graph_id/task/:task_id",
             get(get_task).put(edit_task).delete(delete_task),
@@ -119,6 +121,24 @@ async fn get_all_tasks(
     let mut graph = state.graph.clone();
     db::ensure_graph(&mut graph, &graph_id).await?;
     Ok(Json(db::get_all_tasks(&mut graph, &graph_id).await?))
+}
+
+#[derive(serde::Deserialize)]
+struct ReadyTasksQuery {
+    #[serde(default)]
+    unassigned_only: bool,
+}
+
+/// Tasks in `TODO` whose dependencies are all `DONE`.
+async fn get_ready_tasks(
+    State(state): State<AppState>,
+    Path(graph_id): Path<String>,
+    Query(query): Query<ReadyTasksQuery>,
+) -> Result<Json<Vec<Task>>> {
+    let mut graph = state.graph.clone();
+    db::ensure_graph(&mut graph, &graph_id).await?;
+    let tasks = db::get_all_tasks(&mut graph, &graph_id).await?;
+    Ok(Json(frontier::ready_tasks(tasks, query.unassigned_only)))
 }
 
 async fn get_task(
