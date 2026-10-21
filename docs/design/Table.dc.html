@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Table view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+table{border-collapse:collapse;width:100%}
+th{text-align:left;font-size:12px;font-weight:600;letter-spacing:.04em;color:#3E4753;padding:0 14px;height:40px;background:#FAFBFC;border-bottom:1px solid #DDE2E8;white-space:nowrap}
+td{padding:0 14px;height:52px;border-bottom:1px solid #E8EBEF;font-size:14px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;display:flex;background:#F4F6F8;overflow:hidden">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:60px;flex:none;background:#fff;border-bottom:1px solid #DDE2E8;display:flex;align-items:center;gap:24px;padding:0 24px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:15px">
+        <a href="Graphs.dc.html" style="color:#5B6572;text-decoration:none">Graphs</a><span style="color:#8995A5">/</span><strong style="font-weight:600">Auth service</strong>
+      </div>
+      <div role="tablist" aria-label="Projection" style="display:flex;background:#E8EBEF;border-radius:10px;padding:3px;gap:2px">
+        <a href="Graph.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Graph</a>
+        <a href="Board.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Board</a>
+        <a href="Table.dc.html" aria-current="page" style="height:32px;padding:0 16px;border-radius:8px;background:#fff;color:#12161C;font-size:14px;font-weight:600;display:flex;align-items:center;text-decoration:none;box-shadow:0 1px 2px rgba(18,22,28,.12)">Table</a>
+      </div>
+      <div style="flex:1"></div>
+      <a href="NewTask.dc.html" style="height:40px;padding:0 16px;border-radius:10px;background:#2349C7;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New task</a>
+    </header>
+
+    <div style="height:52px;flex:none;display:flex;align-items:center;gap:8px;padding:0 24px;border-bottom:1px solid #DDE2E8">
+      <label style="display:block"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Filter tasks</span><input type="search" placeholder="Filter tasks" style="height:34px;width:240px;box-sizing:border-box;padding:0 12px;border:1px solid #B9C1CB;border-radius:8px;font-size:14px;background:#fff;color:#12161C"></label>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Status ▾</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Assignee ▾</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Tag ▾</button>
+      <div style="flex:1"></div>
+      <span style="font-size:13px;color:#5B6572">12 tasks · sorted by ID</span>
+    </div>
+
+    <div style="flex:1;padding:20px 24px;box-sizing:border-box;overflow:hidden">
+      <div style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;overflow:hidden">
+        <table>
+          <thead><tr><th style="width:70px">ID</th><th>TASK</th><th style="width:140px">STATUS</th><th style="width:180px">ASSIGNEE</th><th style="width:180px">BLOCKED BY</th><th style="width:130px">UPDATED</th></tr></thead>
+          <tbody>
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+              <tr>
+                <td style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6572">{{r.id}}</td>
+                <td><a href="Task.dc.html" style="font-weight:500;color:#12161C;text-decoration:none">{{r.name}}</a><span style="margin-left:8px;font-size:12px;color:#5B6572">{{r.kind}}</span></td>
+                <td><span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:{{r.bg}};color:{{r.fg}}">{{r.status}}</span></td>
+                <td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:50%;background:{{r.avBg}};color:#fff;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center">{{r.av}}</span>{{r.who}}</span></td>
+                <td style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:{{r.depColor}}">{{r.deps}}</td>
+                <td style="color:#5B6572">{{r.updated}}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = {
+      TODO: ['#E8EBEF', '#3E4753'], IN_PROGRESS: ['#DCE8FF', '#1B3FA8'], REVIEW: ['#EADFFB', '#5A2BA6'],
+      DONE: ['#D5F0E3', '#0F5C3A'], BLOCKED: ['#FFE1D3', '#A13A0B'],
+    };
+    const who = { M: ['MO', '#0F766E', 'Maya Okafor'], I: ['IP', '#7A3FC4', 'Ilya Petrov'], S: ['SL', '#B4530A', 'Sofia Lindqvist'], A: ['AC', '#2349C7', 'Andrei Chirkin'] };
+    const r = (id, name, status, w, deps, updated, kind = '') => ({
+      id, name, kind, status: status.replace('_', ' '), bg: st[status][0], fg: st[status][1],
+      av: who[w][0], avBg: who[w][1], who: who[w][2], deps: deps || '—', depColor: status === 'BLOCKED' ? '#A13A0B' : '#3E4753', updated,
+    });
+    return {
+      rows: [
+        r('T-1', 'Security sync call', 'DONE', 'A', '', 'Oct 12'),
+        r('T-2', 'Deploy secure storage', 'DONE', 'S', 'T-1', 'Oct 13'),
+        r('T-3', 'Backend for storage', 'IN_PROGRESS', 'M', 'T-2', '2 h ago'),
+        r('T-4', 'Frontend on mocks', 'REVIEW', 'I', 'T-2', 'Today, 10:42'),
+        r('T-5', 'Integrate frontend and backend', 'BLOCKED', 'A', 'T-3, T-4', 'Yesterday'),
+        r('T-6', 'QA on test environment', 'TODO', 'S', 'T-5', 'Oct 15'),
+        r('T-7', 'Release to prod', 'TODO', 'A', 'T-6', 'Oct 15'),
+        r('T-8', 'Ship auth service', 'TODO', 'A', 'T-7', 'Oct 14', 'terminal'),
+        r('T-9', 'Write press release', 'TODO', 'I', '', 'Oct 16', 'part of'),
+        r('T-10', 'Threat model document', 'DONE', 'S', '', 'Oct 11'),
+        r('T-11', 'Update dependencies', 'TODO', 'M', '', 'Oct 10', 'chore'),
+        r('T-12', 'Write API contract tests', 'IN_PROGRESS', 'M', 'T-2', 'Yesterday'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

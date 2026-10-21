@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Graph view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;display:flex;background:#F4F6F8;overflow:hidden">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:60px;flex:none;background:#fff;border-bottom:1px solid #DDE2E8;display:flex;align-items:center;gap:24px;padding:0 24px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:15px">
+        <a href="Graphs.dc.html" style="color:#5B6572;text-decoration:none">Graphs</a>
+        <span style="color:#8995A5">/</span>
+        <strong style="font-weight:600">Auth service</strong>
+      </div>
+      <div role="tablist" aria-label="Projection" style="display:flex;background:#E8EBEF;border-radius:10px;padding:3px;gap:2px">
+        <a href="Graph.dc.html" aria-current="page" style="height:32px;padding:0 16px;border-radius:8px;background:#fff;color:#12161C;font-size:14px;font-weight:600;display:flex;align-items:center;text-decoration:none;box-shadow:0 1px 2px rgba(18,22,28,.12)">Graph</a>
+        <a href="Board.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Board</a>
+        <a href="Table.dc.html" style="height:32px;padding:0 16px;border-radius:8px;color:#3E4753;font-size:14px;font-weight:500;display:flex;align-items:center;text-decoration:none">Table</a>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex" aria-label="Members: Maya, Ilya, Sofia, Andrei">
+        <span style="width:30px;height:30px;border-radius:50%;background:#0F766E;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid #fff">MO</span>
+        <span style="width:30px;height:30px;border-radius:50%;background:#7A3FC4;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid #fff;margin-left:-8px">IP</span>
+        <span style="width:30px;height:30px;border-radius:50%;background:#B4530A;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid #fff;margin-left:-8px">SL</span>
+        <span style="width:30px;height:30px;border-radius:50%;background:#2349C7;color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid #fff;margin-left:-8px">AC</span>
+      </div>
+      <a href="NewTask.dc.html" style="height:40px;padding:0 16px;border-radius:10px;background:#2349C7;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;text-decoration:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New task</a>
+    </header>
+
+    <div style="height:52px;flex:none;display:flex;align-items:center;gap:8px;padding:0 24px;background:#F4F6F8;border-bottom:1px solid #DDE2E8">
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #12161C;background:#12161C;color:#fff;font-size:13px;font-weight:500">All tasks · 12</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Mine · 3</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#A13A0B;font-size:13px;font-weight:500">Blocked · 2</button>
+      <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:13px;font-weight:500">Critical path</button>
+      <div style="flex:1"></div>
+      <span style="font-size:13px;color:#5B6572">Terminal node: Ship auth service · 5 of 12 done</span>
+    </div>
+
+    <div style="flex:1;position:relative;overflow:hidden;background-color:#F4F6F8;background-image:radial-gradient(#C9D0D8 1.2px,transparent 1.2px);background-size:22px 22px">
+      <svg width="1376" height="700" viewBox="0 0 1376 700" style="position:absolute;left:0;top:0" fill="none" aria-hidden="true">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6B7684"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2349C7"/></marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#0F766E"/></marker>
+        </defs>
+        <g stroke="#6B7684" stroke-width="1.75" marker-end="url(#a1)">
+          <path d="M168 294 L206 294"/>
+          <path d="M368 294 C388 294 388 184 406 184"/>
+          <path d="M368 294 C388 294 388 404 406 404"/>
+          <path d="M768 294 L806 294"/>
+          <path d="M968 294 L1006 294"/>
+          <path d="M1168 294 L1206 294"/>
+        </g>
+        <g stroke="#2349C7" stroke-width="2.5" marker-end="url(#a2)">
+          <path d="M568 184 C588 184 588 294 606 294"/>
+          <path d="M568 404 C588 404 588 294 606 294"/>
+        </g>
+        <path d="M1168 524 C1288 524 1288 420 1288 340" stroke="#6B7684" stroke-width="1.75" stroke-dasharray="7 5" marker-end="url(#a1)"/>
+        <path d="M968 104 C1288 104 1288 190 1288 248" stroke="#0F766E" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round" marker-end="url(#a3)"/>
+      </svg>
+
+      <sc-for list="{{nodes}}" as="n" hint-placeholder-count="12">
+        <div style="{{n.box}}">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <span style="display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;background:{{n.bg}};color:{{n.fg}}"><span style="width:6px;height:6px;border-radius:50%;background:{{n.dot}}"></span>{{n.label}}</span>
+            <span style="width:22px;height:22px;border-radius:50%;background:{{n.avBg}};color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">{{n.av}}</span>
+          </div>
+          <div style="font-size:13px;line-height:16px;font-weight:500;color:{{n.ink}};margin-top:6px">{{n.name}}</div>
+        </div>
+      </sc-for>
+
+      <div style="position:absolute;left:620px;top:372px;width:300px;box-sizing:border-box;background:#fff;border:1px solid #DDE2E8;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 24px rgba(18,22,28,.12)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><strong style="font-size:14px;font-weight:600">Integrate frontend and backend</strong><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5B6572">T-5</span></div>
+        <div style="font-size:13px;line-height:1.5;color:#3E4753">Blocked: waiting on 1 of 2 dependencies.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+          <div style="display:flex;justify-content:space-between"><span>T-3 Backend for storage</span><span style="color:#1B3FA8;font-weight:500">In progress</span></div>
+          <div style="display:flex;justify-content:space-between"><span>T-4 Frontend on mocks</span><span style="color:#5A2BA6;font-weight:500">Review</span></div>
+        </div>
+        <a href="Task.dc.html" style="font-size:14px;font-weight:600;text-decoration:none">Open task →</a>
+      </div>
+
+      <div role="group" aria-label="Zoom" style="position:absolute;left:16px;bottom:16px;display:flex;align-items:center;background:#fff;border:1px solid #DDE2E8;border-radius:10px;overflow:hidden">
+        <button aria-label="Zoom out" style="width:40px;height:40px;border:0;background:#fff;font-size:18px;color:#12161C">−</button>
+        <span style="padding:0 10px;font-size:13px;color:#3E4753;font-weight:500">100%</span>
+        <button aria-label="Zoom in" style="width:40px;height:40px;border:0;background:#fff;font-size:18px;color:#12161C">+</button>
+        <button style="height:40px;padding:0 14px;border:0;border-left:1px solid #DDE2E8;background:#fff;font-size:13px;font-weight:500;color:#12161C">Fit</button>
+      </div>
+
+      <div style="position:absolute;left:260px;bottom:16px;display:flex;align-items:center;gap:20px;background:#fff;border:1px solid #DDE2E8;border-radius:10px;padding:0 16px;height:40px;font-size:13px;color:#3E4753">
+        <span style="display:flex;align-items:center;gap:8px"><svg width="32" height="8" aria-hidden="true"><path d="M0 4H32" stroke="#6B7684" stroke-width="2"/></svg>Blocks</span>
+        <span style="display:flex;align-items:center;gap:8px"><svg width="32" height="8" aria-hidden="true"><path d="M0 4H32" stroke="#6B7684" stroke-width="2" stroke-dasharray="6 4"/></svg>Part of</span>
+        <span style="display:flex;align-items:center;gap:8px"><svg width="32" height="8" aria-hidden="true"><path d="M0 4H32" stroke="#0F766E" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"/></svg>Affects (other graph)</span>
+      </div>
+
+      <div style="position:absolute;right:16px;bottom:16px;width:180px;height:112px;background:#fff;border:1px solid #DDE2E8;border-radius:10px" aria-hidden="true">
+        <svg width="180" height="112" viewBox="0 0 180 112"><g fill="#B9C1CB"><rect x="8" y="46" width="14" height="8" rx="2"/><rect x="28" y="46" width="14" height="8" rx="2"/><rect x="48" y="30" width="14" height="8" rx="2"/><rect x="48" y="62" width="14" height="8" rx="2"/><rect x="68" y="46" width="14" height="8" rx="2" fill="#2349C7"/><rect x="88" y="46" width="14" height="8" rx="2"/><rect x="108" y="46" width="14" height="8" rx="2"/><rect x="128" y="46" width="18" height="8" rx="2" fill="#12161C"/><rect x="108" y="78" width="14" height="8" rx="2"/><rect x="88" y="14" width="14" height="8" rx="2"/></g><rect x="4" y="8" width="168" height="94" rx="4" fill="none" stroke="#2349C7" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = {
+      TODO: ['#E8EBEF', '#3E4753', '#7A8594', 'TODO'],
+      IN_PROGRESS: ['#DCE8FF', '#1B3FA8', '#2F5BEA', 'IN PROGRESS'],
+      REVIEW: ['#EADFFB', '#5A2BA6', '#8A55E0', 'REVIEW'],
+      DONE: ['#D5F0E3', '#0F5C3A', '#1E9E63', 'DONE'],
+      BLOCKED: ['#FFE1D3', '#A13A0B', '#E0561F', 'BLOCKED'],
+    };
+    const av = { M: ['MO', '#0F766E'], I: ['IP', '#7A3FC4'], S: ['SL', '#B4530A'], A: ['AC', '#2349C7'] };
+    const n = (name, x, y, status, who, opts = {}) => {
+      const s = st[status];
+      const border = opts.selected ? '2px solid #2349C7' : status === 'BLOCKED' ? '1.5px solid #E0561F' : opts.dashed ? '1.5px dashed #8995A5' : '1px solid #C9D0D8';
+      const bg = opts.dark ? '#12161C' : '#fff';
+      const shadow = opts.selected ? '0 0 0 4px rgba(35,73,199,.18)' : '0 1px 2px rgba(18,22,28,.08)';
+      return {
+        name, bg: s[0], fg: s[1], dot: s[2], label: opts.tag || s[3],
+        av: av[who][0], avBg: av[who][1], ink: opts.dark ? '#fff' : '#12161C',
+        box: `position:absolute;left:${x}px;top:${y}px;width:160px;height:88px;box-sizing:border-box;padding:10px;border-radius:12px;background:${bg};border:${border};box-shadow:${shadow}`,
+      };
+    };
+    return {
+      nodes: [
+        n('Security sync call', 8, 250, 'DONE', 'A'),
+        n('Deploy secure storage', 208, 250, 'DONE', 'S'),
+        n('Backend for storage', 408, 140, 'IN_PROGRESS', 'M'),
+        n('Frontend on mocks', 408, 360, 'REVIEW', 'I'),
+        n('Integrate frontend and backend', 608, 250, 'BLOCKED', 'A', { selected: true }),
+        n('QA on test environment', 808, 250, 'TODO', 'S'),
+        n('Release to prod', 1008, 250, 'TODO', 'A'),
+        n('Ship auth service', 1208, 250, 'TODO', 'A', { dark: true }),
+        n('Write press release', 1008, 480, 'TODO', 'I', { dashed: true }),
+        n('Storage bug: token leak (Platform)', 808, 60, 'IN_PROGRESS', 'M', { dashed: true }),
+        n('Update dependencies', 8, 520, 'TODO', 'M', { dashed: true, tag: 'CHORE · WEEKLY' }),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

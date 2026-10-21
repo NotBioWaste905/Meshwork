@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>User profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="display:flex;min-height:1100px;background:#F4F6F8">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px;box-shadow:0 0 0 2px #12161C,0 0 0 4px #fff">AC</a>
+  </nav>
+
+  <main style="flex:1;min-width:0;padding:32px 40px 48px;box-sizing:border-box;display:flex;flex-direction:column;gap:28px">
+    <section aria-label="Profile" style="background:#fff;border:1px solid #DDE2E8;border-radius:16px;padding:28px;display:flex;flex-wrap:wrap;gap:24px 32px;align-items:center">
+      <div style="width:88px;height:88px;border-radius:50%;background:#2349C7;color:#fff;font-size:32px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none">AC</div>
+      <div style="flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px">
+        <h1 style="margin:0;font-size:30px;font-weight:600;letter-spacing:-0.02em">Andrei Chirkin</h1>
+        <div style="font-size:15px;color:#5B6572">Engineering lead · andruha.chirkin@gmail.com</div>
+        <div style="font-size:14px;color:#5B6572">In 3 graphs · member since Mar 2026</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(88px,1fr));gap:12px;flex:1 1 420px">
+        <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+          <div style="background:#F4F6F8;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:28px;font-weight:600;color:{{s.color}}">{{s.value}}</span>
+            <span style="font-size:13px;color:#3E4753">{{s.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+      <div style="flex:3 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+          <div role="tablist" aria-label="Issue lists" style="display:flex;background:#E8EBEF;border-radius:10px;padding:3px;gap:2px">
+            <button role="tab" aria-selected="true" style="height:34px;padding:0 16px;border-radius:8px;border:0;background:#fff;color:#12161C;font-size:14px;font-weight:600;box-shadow:0 1px 2px rgba(18,22,28,.12)">Assigned · 7</button>
+            <button role="tab" aria-selected="false" style="height:34px;padding:0 16px;border-radius:8px;border:0;background:transparent;color:#3E4753;font-size:14px;font-weight:500">To review · 2</button>
+            <button role="tab" aria-selected="false" style="height:34px;padding:0 16px;border-radius:8px;border:0;background:transparent;color:#3E4753;font-size:14px;font-weight:500">Created · 19</button>
+            <button role="tab" aria-selected="false" style="height:34px;padding:0 16px;border-radius:8px;border:0;background:transparent;color:#3E4753;font-size:14px;font-weight:500">Done · 14</button>
+          </div>
+          <button style="height:36px;padding:0 14px;border-radius:8px;border:1px solid #B9C1CB;background:#fff;font-size:14px;font-weight:500;color:#12161C">All graphs ▾</button>
+        </div>
+
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <section style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;overflow:hidden">
+            <h2 style="margin:0;padding:12px 20px;background:#FAFBFC;border-bottom:1px solid #E8EBEF;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:{{g.dot}}"></span>{{g.title}}<span style="font-weight:400;color:#5B6572">{{g.count}}</span></h2>
+            <ul style="list-style:none;margin:0;padding:0">
+              <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="2">
+                <li style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:14px 20px;border-top:1px solid #E8EBEF">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5B6572;width:48px">{{r.id}}</span>
+                  <div style="flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:2px">
+                    <a href="Task.dc.html" style="font-size:15px;font-weight:500;color:#12161C;text-decoration:none">{{r.name}}</a>
+                    <span style="font-size:13px;color:{{r.noteColor}}">{{r.note}}</span>
+                  </div>
+                  <span style="font-size:13px;color:#3E4753;padding:3px 10px;border-radius:6px;background:#F4F6F8">{{r.graph}}</span>
+                  <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:{{r.bg}};color:{{r.fg}};min-width:84px;text-align:center">{{r.status}}</span>
+                </li>
+              </sc-for>
+            </ul>
+          </section>
+        </sc-for>
+      </div>
+
+      <aside style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:20px">
+        <section aria-labelledby="wl" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px">
+          <h2 id="wl" style="margin:0;font-size:15px;font-weight:600">Workload by graph</h2>
+          <sc-for list="{{load}}" as="l" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:14px"><span>{{l.name}}</span><span style="color:#5B6572">{{l.n}} open</span></div>
+              <div style="height:8px;border-radius:4px;background:#E8EBEF;overflow:hidden"><div style="height:100%;width:{{l.pct}}%;background:{{l.color}}"></div></div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section aria-labelledby="ra" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px">
+          <h2 id="ra" style="margin:0;font-size:15px;font-weight:600">Recent activity</h2>
+          <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px">
+            <sc-for list="{{recent}}" as="a" hint-placeholder-count="4">
+              <li style="display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:14px;line-height:1.45">{{a.what}}</span>
+                <span style="font-size:13px;color:#5B6572">{{a.when}}</span>
+              </li>
+            </sc-for>
+          </ul>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = {
+      TODO: ['#E8EBEF', '#3E4753', '#7A8594'], IN_PROGRESS: ['#DCE8FF', '#1B3FA8', '#2F5BEA'], REVIEW: ['#EADFFB', '#5A2BA6', '#8A55E0'],
+      DONE: ['#D5F0E3', '#0F5C3A', '#1E9E63'], BLOCKED: ['#FFE1D3', '#A13A0B', '#E0561F'],
+    };
+    const r = (id, name, graph, status, note, warn) => ({
+      id, name, graph, status: status.replace('_', ' '), bg: st[status][0], fg: st[status][1], note, noteColor: warn ? '#A13A0B' : '#5B6572',
+    });
+    const grp = (key, title, rows) => ({ title, dot: st[key][2], count: rows.length, rows });
+    return {
+      stats: [
+        { value: 7, label: 'Assigned', color: '#12161C' },
+        { value: 2, label: 'To review', color: '#5A2BA6' },
+        { value: 1, label: 'Blocked', color: '#A13A0B' },
+        { value: 14, label: 'Done in Oct', color: '#0F5C3A' },
+      ],
+      groups: [
+        grp('BLOCKED', 'Blocked', [r('T-5', 'Integrate frontend and backend', 'Auth service', 'BLOCKED', 'Waiting on T-3 and T-4 · blocks T-6', true)]),
+        grp('IN_PROGRESS', 'In progress', [
+          r('T-22', 'Draft failover runbook', 'Platform storage', 'IN_PROGRESS', 'Blocks T-31 · updated 2 h ago'),
+          r('T-49', 'Landing copy v2', 'Q4 growth', 'IN_PROGRESS', 'No dependents · updated yesterday'),
+        ]),
+        grp('TODO', 'To do', [
+          r('T-57', 'Pick pricing experiment', 'Q4 growth', 'TODO', 'Blocks 3 tasks · nobody can start until this is picked', true),
+          r('T-7', 'Release to prod', 'Auth service', 'TODO', 'Waits on T-6'),
+          r('T-8', 'Ship auth service', 'Auth service', 'TODO', 'Terminal node · waits on T-7'),
+          r('T-12', 'Rotate TLS certificates', 'Security audit', 'TODO', 'Chore · every 90 days'),
+        ]),
+        grp('REVIEW', 'Waiting for your review', [
+          r('T-4', 'Frontend on mocks', 'Auth service', 'REVIEW', 'Ilya Petrov · blocks T-5', true),
+          r('T-31', 'Approve storage failover plan', 'Platform storage', 'REVIEW', 'Maya Okafor · blocks 2 tasks', true),
+        ]),
+      ],
+      load: [
+        { name: 'Auth service', n: 4, pct: 100, color: '#2349C7' },
+        { name: 'Q4 growth', n: 2, pct: 50, color: '#7A3FC4' },
+        { name: 'Platform storage', n: 2, pct: 50, color: '#0F766E' },
+        { name: 'Security audit', n: 1, pct: 25, color: '#B4530A' },
+      ],
+      recent: [
+        { what: 'Changed T-5 from To do to Blocked', when: 'Yesterday, 17:05' },
+        { what: 'Commented on T-22 Draft failover runbook', when: 'Yesterday, 14:30' },
+        { what: 'Completed T-1 Security sync call', when: 'Oct 12' },
+        { what: 'Created T-5 Integrate frontend and backend', when: 'Oct 14' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}a:hover{color:#1A3694}
+button,input{font-family:inherit}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+input[type=checkbox]{width:20px;height:20px;accent-color:#2349C7;margin:0}
+</style>
+</helmet>
+<div style="display:flex;min-height:900px;background:#F4F6F8">
+  <nav aria-label="Primary" style="width:64px;flex:none;background:#12161C;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;box-sizing:border-box">
+    <a href="Graphs.dc.html" aria-label="Meshwork home" style="width:36px;height:36px;border-radius:10px;background:#2349C7;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-4M8.3 13l7.4 4"/></svg></a>
+    <a href="Graphs.dc.html" aria-label="Graphs" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+    <a href="User.dc.html" aria-label="My work" style="width:44px;height:44px;border-radius:10px;color:#AEB7C2;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></a>
+    <div style="flex:1"></div>
+    <a href="Settings.dc.html" aria-label="Settings" aria-current="page" style="width:44px;height:44px;border-radius:10px;background:#27303B;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
+    <a href="User.dc.html" aria-label="Your profile" style="width:36px;height:36px;border-radius:50%;background:#2349C7;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:4px">AC</a>
+  </nav>
+
+  <main style="flex:1;min-width:0;padding:32px 40px 48px;box-sizing:border-box;display:flex;flex-direction:column;gap:28px">
+    <h1 style="margin:0;font-size:30px;font-weight:600;letter-spacing:-0.02em">Settings</h1>
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <nav aria-label="Settings sections" style="flex:0 0 200px;display:flex;flex-direction:column;gap:2px">
+        <a href="Settings.dc.html" aria-current="page" style="height:44px;padding:0 14px;border-radius:10px;background:#fff;border:1px solid #DDE2E8;color:#12161C;font-size:15px;font-weight:600;display:flex;align-items:center;text-decoration:none">Profile</a>
+        <a href="Settings.dc.html" style="height:44px;padding:0 14px;border-radius:10px;color:#3E4753;font-size:15px;font-weight:500;display:flex;align-items:center;text-decoration:none">Notifications</a>
+        <a href="Settings.dc.html" style="height:44px;padding:0 14px;border-radius:10px;color:#3E4753;font-size:15px;font-weight:500;display:flex;align-items:center;text-decoration:none">Members and roles</a>
+        <a href="Settings.dc.html" style="height:44px;padding:0 14px;border-radius:10px;color:#3E4753;font-size:15px;font-weight:500;display:flex;align-items:center;text-decoration:none">API tokens</a>
+      </nav>
+
+      <div style="flex:1 1 480px;min-width:0;max-width:720px;display:flex;flex-direction:column;gap:20px">
+        <section aria-labelledby="pf" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:18px">
+          <h2 id="pf" style="margin:0;font-size:18px;font-weight:600">Profile</h2>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="width:64px;height:64px;border-radius:50%;background:#2349C7;color:#fff;font-size:24px;font-weight:600;display:flex;align-items:center;justify-content:center">AC</div>
+            <button style="height:40px;padding:0 16px;border-radius:10px;border:1px solid #B9C1CB;background:#fff;font-size:14px;font-weight:500;color:#12161C">Change photo</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label for="fn" style="font-size:14px;font-weight:500">Full name</label>
+              <input id="fn" type="text" value="Andrei Chirkin" style="height:44px;box-sizing:border-box;padding:0 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:16px;background:#fff;color:#12161C">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label for="em" style="font-size:14px;font-weight:500">Email</label>
+              <input id="em" type="email" value="andruha.chirkin@gmail.com" style="height:44px;box-sizing:border-box;padding:0 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:16px;background:#fff;color:#12161C">
+            </div>
+          </div>
+          <button style="align-self:flex-start;height:44px;padding:0 20px;border-radius:10px;border:0;background:#2349C7;color:#fff;font-size:15px;font-weight:600">Save changes</button>
+        </section>
+
+        <section aria-labelledby="nt" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:6px">
+          <h2 id="nt" style="margin:0 0 8px;font-size:18px;font-weight:600">Notify me when</h2>
+          <sc-for list="{{prefs}}" as="p" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid #E8EBEF">
+              <input id="{{p.id}}" type="checkbox" checked="{{p.on}}">
+              <label for="{{p.id}}" style="flex:1;display:flex;flex-direction:column;gap:2px;font-size:15px;font-weight:500">{{p.title}}<span style="font-size:13px;font-weight:400;color:#5B6572">{{p.hint}}</span></label>
+            </div>
+          </sc-for>
+        </section>
+
+        <section aria-labelledby="ss" style="background:#fff;border:1px solid #DDE2E8;border-radius:14px;padding:24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <h2 id="ss" style="margin:0;font-size:18px;font-weight:600">Session</h2>
+            <span style="font-size:14px;color:#5B6572">Signed in on this device since Oct 14</span>
+          </div>
+          <a href="Main.dc.html" style="height:44px;padding:0 20px;border-radius:10px;border:1px solid #B9C1CB;background:#fff;color:#A13A0B;font-size:15px;font-weight:600;display:flex;align-items:center;text-decoration:none">Sign out</a>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      prefs: [
+        { id: 'p1', on: true, title: 'A task I am assigned to becomes unblocked', hint: 'All its blockers are done' },
+        { id: 'p2', on: true, title: 'A task I own gets blocked', hint: 'Someone adds a blocker or a blocker is reopened' },
+        { id: 'p3', on: true, title: 'I am asked to review a result', hint: 'A task moves to Review with me as reviewer' },
+        { id: 'p4', on: false, title: 'Anyone edits a task I created', hint: 'Every change is logged either way' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

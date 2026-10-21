@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New task dialog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#12161C;background:#F4F6F8}
+a{color:#2349C7}
+button,input,textarea,select{font-family:inherit}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #2349C7;outline-offset:2px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;position:relative;overflow:hidden;background-color:#F4F6F8;background-image:radial-gradient(#C9D0D8 1.2px,transparent 1.2px);background-size:22px 22px">
+  <div aria-hidden="true" style="position:absolute;left:64px;top:0;right:0;height:60px;background:#fff;border-bottom:1px solid #DDE2E8"></div>
+  <div aria-hidden="true" style="position:absolute;left:0;top:0;bottom:0;width:64px;background:#12161C"></div>
+  <div style="position:absolute;inset:0;background:rgba(18,22,28,.55)"></div>
+
+  <div role="dialog" aria-modal="true" aria-labelledby="dt" style="position:absolute;left:400px;top:48px;width:640px;box-sizing:border-box;background:#fff;border-radius:16px;box-shadow:0 24px 64px rgba(18,22,28,.35);display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid #E8EBEF">
+      <h1 id="dt" style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.01em">New task in Auth service</h1>
+      <a href="Graph.dc.html" aria-label="Close" style="width:44px;height:44px;margin:-8px -12px;display:flex;align-items:center;justify-content:center;color:#3E4753"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    </div>
+
+    <form style="padding:24px 28px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label for="n" style="font-size:14px;font-weight:500">Name <span style="color:#A13A0B">*</span></label>
+        <input id="n" type="text" value="Set up staging secrets" style="height:44px;box-sizing:border-box;padding:0 14px;border:2px solid #2349C7;border-radius:10px;font-size:16px;color:#12161C;background:#fff">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label for="d" style="font-size:14px;font-weight:500">Description</label>
+        <textarea id="d" rows="3" placeholder="What does done look like?" style="padding:12px 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;resize:none;color:#12161C;background:#fff"></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="t" style="font-size:14px;font-weight:500">Type</label>
+          <select id="t" style="height:44px;padding:0 12px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;background:#fff;color:#12161C"><option>Task</option><option>Chore (repeats)</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="s" style="font-size:14px;font-weight:500">Status</label>
+          <select id="s" style="height:44px;padding:0 12px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;background:#fff;color:#12161C"><option>To do</option><option>In progress</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label for="a" style="font-size:14px;font-weight:500">Assignee</label>
+          <select id="a" style="height:44px;padding:0 12px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;background:#fff;color:#12161C"><option>Andrei Chirkin</option><option>Maya Okafor</option></select>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:14px;font-weight:500">Blocked by</span>
+        <div style="min-height:44px;box-sizing:border-box;padding:6px 10px;border:1px solid #B9C1CB;border-radius:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span style="height:30px;padding:0 6px 0 10px;border-radius:8px;background:#E8EBEF;font-size:13px;display:inline-flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono',monospace;color:#5B6572">T-2</span>Deploy secure storage<span aria-hidden="true" style="color:#5B6572;padding:0 4px">×</span></span>
+          <span style="color:#5B6572;font-size:14px;padding-left:4px">Search tasks to add a blocker</span>
+        </div>
+        <span style="font-size:13px;color:#5B6572">All blockers must be done before this task can start. Blockers must be in this graph.</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label for="tg" style="font-size:14px;font-weight:500">Tags</label>
+        <input id="tg" type="text" placeholder="Add a tag and press Enter" style="height:44px;box-sizing:border-box;padding:0 14px;border:1px solid #B9C1CB;border-radius:10px;font-size:15px;background:#fff;color:#12161C">
+      </div>
+    </form>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;padding:16px 28px;border-top:1px solid #E8EBEF;background:#FAFBFC;border-radius:0 0 16px 16px">
+      <a href="Graph.dc.html" style="height:44px;padding:0 20px;border-radius:10px;border:1px solid #B9C1CB;background:#fff;color:#12161C;font-size:15px;font-weight:500;display:flex;align-items:center;text-decoration:none">Cancel</a>
+      <a href="Graph.dc.html" style="height:44px;padding:0 22px;border-radius:10px;background:#2349C7;color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;text-decoration:none">Create task</a>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

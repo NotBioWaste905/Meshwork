@@ -1,5 +1,19 @@
 import type { Edge, Node } from '@xyflow/svelte';
 import type { Task } from '$lib/api';
 
-export type TaskFlowNode = Node<Task, 'task'>;
+/** Node data: the task plus view state the canvas derives from the whole graph. */
+export type TaskNodeData = Task & {
+	/** Nothing depends on this task: it is a goal of the graph. */
+	terminal: boolean;
+	/** Tagged `chore`: repeating work, drawn dashed. */
+	chore: boolean;
+	selected: boolean;
+	/** Filtered out by the chips above the canvas. */
+	dim: boolean;
+};
+
+export type TaskFlowNode = Node<TaskNodeData, 'task'>;
 export type TaskFlowEdge = Edge;
+
+export const NODE_WIDTH = 160;
+export const NODE_HEIGHT = 88;
