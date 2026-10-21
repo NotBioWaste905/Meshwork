@@ -78,9 +78,9 @@
 
 ## Гигиена репо
 
-- [ ] Rust Dockerfile: multi-stage; `node:19` → LTS
+- [x] Rust Dockerfile: multi-stage; `node:19` → LTS
 - [ ] Апгрейд axum 0.6 → 0.8 (+ tower-http 0.6)
-- [ ] Убрать неиспользуемые пакеты flowbite из фронта
+- [x] Убрать неиспользуемые пакеты flowbite из фронта
 - [ ] Удалять тестовые графы: нет API удаления графа
 
 ## Сделано
