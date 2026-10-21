@@ -1,13 +1,12 @@
-FROM node:19 as build
+FROM node:19 AS build
 
-ENV NODE_ENV=production
-
+# vite and svelte-kit are devDependencies, so no NODE_ENV=production here
 
 WORKDIR /app
 
 COPY package.json ./
 COPY package-lock.json ./
-RUN npm install
+RUN npm ci
 COPY . ./
 RUN npm run build
 

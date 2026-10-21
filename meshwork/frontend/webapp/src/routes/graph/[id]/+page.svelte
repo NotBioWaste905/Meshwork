@@ -1,143 +1,134 @@
-<script>
+<script lang="ts">
 	import {
 		SvelteFlowProvider,
 		Controls,
 		Background,
 		SvelteFlow,
-		useSvelteFlow,
-		Panel
+		Panel,
+		Position,
+		type Connection,
+		type NodeTypes
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { onMount } from 'svelte';
 	import Dagre from '@dagrejs/dagre';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
-	import TaskNode from './TaskNode.svelte';
-	import { api } from '$lib/api';
+	import TaskNode from '../TaskNode.svelte';
+	import { LAST_GRAPH_KEY } from '../lastGraph';
+	import type { TaskFlowEdge, TaskFlowNode } from '../types';
+	import { api, ApiError, type Task } from '$lib/api';
 
 	import { Button } from 'flowbite-svelte';
 
-	const nodeTypes = {
+	const nodeTypes: NodeTypes = {
 		task: TaskNode
 	};
 
-	let nodes = $state([]);
-	let edges = $state([]);
-	let currentGraphId = $state('abc123');
+	let nodes = $state.raw<TaskFlowNode[]>([]);
+	let edges = $state.raw<TaskFlowEdge[]>([]);
+	let errorMessage = $state('');
+	let currentGraphId = $derived(page.params.id ?? '');
 
-	// Initialize or get graph
-	onMount(async () => {
-		try {
-			// For now, create a new graph each time
-			// In a real app, you'd probably want to save/load graph IDs
-			const response = await api.createGraph();
-			// currentGraphId = response.ID;
-			console.log('Created graph:', currentGraphId);
-
-			// Load existing tasks
-			await loadTasks();
-		} catch (error) {
-			console.error('Failed to initialize graph:', error);
-		}
+	$effect(() => {
+		loadTasks(currentGraphId);
 	});
 
-	async function loadTasks() {
-		if (!currentGraphId) return;
+	function showError(action: string, error: unknown) {
+		console.error(`Failed to ${action}:`, error);
+		errorMessage = `Failed to ${action}: ${error instanceof Error ? error.message : error}`;
+	}
 
+	function rememberGraph(graphId: string | null) {
 		try {
-			const tasks = await api.getAllTasks(currentGraphId);
-			console.log('Loaded tasks:', tasks);
-			console.log('Number of tasks:', tasks.length);
-			tasks.forEach((task) => {
-				console.log(`Task ${task.id} (${task.name}): depends on`, task.depends_on);
-			});
-
-			// Convert tasks to nodes
-			nodes = tasks.map((task, index) => ({
-				id: task.id,
-				type: 'task',
-				position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
-				data: { ...task, graphId: currentGraphId }
-			}));
-
-			// Create a set of all existing node IDs for validation
-			const nodeIds = new Set(tasks.map((task) => task.id));
-
-			// Create edges array - ensure all referenced nodes exist
-			const newEdges = [];
-			for (const task of tasks) {
-				for (let dependency of task.depends_on) {
-					// Only create edge if both source and target nodes exist
-					if (nodeIds.has(dependency) && nodeIds.has(task.id)) {
-						console.log('Creating edge from', dependency, 'to', task.id);
-						newEdges.push({
-							id: `edge-${dependency}-${task.id}`,
-							source: dependency,
-							target: task.id
-						});
-					} else {
-						console.warn('Skipping edge: missing node', {
-							dependency,
-							taskId: task.id,
-							hasSource: nodeIds.has(dependency),
-							hasTarget: nodeIds.has(task.id)
-						});
-					}
-				}
-			}
-			edges = newEdges;
-			console.log('Created edges:', edges);
-		} catch (error) {
-			console.error('Failed to load tasks:', error);
+			if (graphId) localStorage.setItem(LAST_GRAPH_KEY, graphId);
+			else localStorage.removeItem(LAST_GRAPH_KEY);
+		} catch {
+			// storage unavailable, nothing to remember
 		}
+	}
+
+	function toNode(task: Task, index: number): TaskFlowNode {
+		return {
+			id: task.id,
+			type: 'task',
+			position: { x: 100 + (index % 3) * 350, y: 100 + Math.floor(index / 3) * 200 },
+			data: task
+		};
+	}
+
+	async function loadTasks(graphId: string) {
+		let tasks: Task[];
+		try {
+			tasks = await api.getAllTasks(graphId);
+		} catch (error) {
+			if (error instanceof ApiError && error.status === 404) {
+				// Unknown graph: forget it if it was the remembered one, then let /graph pick one.
+				try {
+					if (localStorage.getItem(LAST_GRAPH_KEY) === graphId) rememberGraph(null);
+				} catch {
+					// storage unavailable
+				}
+				await goto('/graph', { replaceState: true });
+				return;
+			}
+			showError('load tasks', error);
+			return;
+		}
+		rememberGraph(graphId);
+		errorMessage = '';
+
+		nodes = tasks.map(toNode);
+
+		// Edge direction on the canvas: dependency (blocker) -> dependent task.
+		const nodeIds = new Set(tasks.map((task) => task.id));
+		edges = tasks.flatMap((task) =>
+			task.depends_on
+				.filter((dependency) => nodeIds.has(dependency))
+				.map((dependency) => ({
+					id: `edge-${dependency}-${task.id}`,
+					source: dependency,
+					target: task.id
+				}))
+		);
 	}
 
 	async function addNewTask() {
-		if (!currentGraphId) return;
-
 		try {
-			const newTask = {
+			const task = await api.addTask(currentGraphId, {
 				name: 'New Task',
 				description: 'Click to edit this task'
-			};
-
-			await api.addTask(currentGraphId, newTask);
-			await loadTasks(); // Reload to get the task with proper ID
+			});
+			nodes = [...nodes, toNode(task, nodes.length)];
 		} catch (error) {
-			console.error('Failed to add task:', error);
+			showError('add task', error);
 		}
 	}
 
-	function onConnect(params) {
-		console.log('Connecting nodes:', params);
-		// send update to backend
-		api.connectNodes(currentGraphId, params.source, params.target);
-	}
-
-	function onDisconnect(params) {
-		console.log('Disconnecting nodes:', params);
-		// send update to backend
-		api.disconnectNodes(currentGraphId, params.edge.source, params.edge.target);
-		// Update edges array
-		edges = edges.filter((edge) => edge.id !== params.edge.id);
-	}
-
-	// Handle node data updates
-	function onNodeChange(changes) {
-		// Handle node updates here if needed
-		console.log('Node changes:', changes);
-	}
-
-	// Handle task updates from nodes
-	async function onTaskUpdate(taskId, updatedData) {
+	async function onConnect(params: Connection) {
 		try {
-			await api.updateTask(currentGraphId, taskId, updatedData);
-			// Optionally reload tasks to ensure consistency
-			// await loadTasks();
+			await api.connectNodes(currentGraphId, params.source, params.target);
 		} catch (error) {
-			console.error('Failed to update task:', error);
+			showError('connect tasks', error);
+			await loadTasks(currentGraphId);
 		}
 	}
-	function getLayoutedElements(nodes, edges, options) {
+
+	async function onDisconnect(params: { edge: TaskFlowEdge }) {
+		try {
+			await api.disconnectNodes(currentGraphId, params.edge.source, params.edge.target);
+			edges = edges.filter((edge) => edge.id !== params.edge.id);
+		} catch (error) {
+			showError('disconnect tasks', error);
+			await loadTasks(currentGraphId);
+		}
+	}
+
+	function getLayoutedElements(
+		nodes: TaskFlowNode[],
+		edges: TaskFlowEdge[],
+		options: { direction: 'LR' | 'TB' }
+	) {
 		const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 		g.setGraph({ rankdir: options.direction });
 
@@ -163,26 +154,27 @@
 				return {
 					...node,
 					position: { x, y },
-					sourcePosition: options.direction === 'LR' ? 'right' : 'bottom',
-					targetPosition: options.direction === 'LR' ? 'left' : 'top'
+					sourcePosition: options.direction === 'LR' ? Position.Right : Position.Bottom,
+					targetPosition: options.direction === 'LR' ? Position.Left : Position.Top
 				};
 			}),
 			edges
 		};
 	}
 
-	function onLayout(direction) {
+	function onLayout(direction: 'LR' | 'TB') {
 		const layouted = getLayoutedElements(nodes, edges, { direction });
 
 		nodes = [...layouted.nodes];
 		edges = [...layouted.edges];
-
-		fitView();
 	}
 </script>
 
 <div class="graph-container">
 	<div class="toolbar">
+		{#if errorMessage}
+			<span class="error">{errorMessage}</span>
+		{/if}
 		<span class="graph-id">Graph ID: {currentGraphId}</span>
 	</div>
 	<div class="flow-container">
@@ -192,7 +184,6 @@
 				{nodeTypes}
 				bind:edges
 				fitView
-				onNodesChange={onNodeChange}
 				onconnect={onConnect}
 				onedgeclick={onDisconnect}
 			>
@@ -241,6 +232,12 @@
 		font-size: 12px;
 		color: #6b7280;
 		font-family: monospace;
+	}
+
+	.error {
+		margin-right: auto;
+		font-size: 13px;
+		color: #dc2626;
 	}
 
 	.flow-container {

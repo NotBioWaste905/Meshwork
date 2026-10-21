@@ -1,30 +1,42 @@
-// API types based on your backend models
-export interface Task {
+// Mirrors meshwork/backend_rs/src/schemas.rs
+export enum Status {
+	TODO = 'TODO',
+	IN_PROGRESS = 'IN_PROGRESS',
+	DONE = 'DONE',
+	REVIEW = 'REVIEW',
+	BLOCKED = 'BLOCKED'
+}
+
+// A type alias rather than an interface so it fits xyflow's Record<string, unknown> node data.
+export type Task = {
 	id: string;
 	name: string;
 	description: string;
+	/** IDs of the tasks blocking this one. */
 	depends_on: string[];
 	users: string[];
 	tags: string[];
 	status: Status;
-	graphId?: string;
-}
+	graph_id: string;
+};
 
-export enum Status {
-	'TODO' = 0,
-	'IN_PROGRESS' = 1,
-	'DONE' = 2,
-	'REVIEW' = 3,
-	'BLOCKED' = 4
-}
+/** Body for creating a task: the server assigns the ID, the graph comes from the URL. */
+export type NewTask = Pick<Task, 'name'> &
+	Partial<Pick<Task, 'description' | 'depends_on' | 'users' | 'tags' | 'status'>>;
 
-export interface TaskGraph {
-	id: string;
-	name: string;
-}
+/** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
+export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id'>>;
 
-const API_BASE_URL = 'http://localhost:8000'; // Adjust this to your FastAPI server port
-const EXAMPLE_GRAPH_ID = 'abc123';
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+export class ApiError extends Error {
+	constructor(
+		public status: number,
+		message: string
+	) {
+		super(message);
+	}
+}
 
 export class MeshworkAPI {
 	private baseUrl: string;
@@ -33,91 +45,67 @@ export class MeshworkAPI {
 		this.baseUrl = baseUrl;
 	}
 
-	// Graph operations
-	async createGraph(): Promise<{ ID: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/create_graph`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' }
+	private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+		const response = await fetch(`${this.baseUrl}${path}`, {
+			method,
+			headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+			body: body === undefined ? undefined : JSON.stringify(body)
 		});
-		return response.json();
+		const text = await response.text();
+		const data = text ? JSON.parse(text) : null;
+		if (!response.ok) {
+			throw new ApiError(response.status, data?.message ?? text ?? response.statusText);
+		}
+		return data as T;
+	}
+
+	// Graph operations
+	createGraph(): Promise<{ ID: string }> {
+		return this.request('POST', '/v0/create_graph');
 	}
 
 	// Task operations
-	async getAllTasks(graphId: string = EXAMPLE_GRAPH_ID): Promise<Task[]> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/all_tasks`);
-		return response.json();
+	getAllTasks(graphId: string): Promise<Task[]> {
+		return this.request('GET', `/v0/${graphId}/all_tasks`);
 	}
 
-	async getTask(graphId: string = EXAMPLE_GRAPH_ID, taskId: string): Promise<Task> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`);
-		return response.json();
+	getTask(graphId: string, taskId: string): Promise<Task> {
+		return this.request('GET', `/v0/${graphId}/task/${taskId}`);
 	}
 
-	async addTask(
-		graphId: string = EXAMPLE_GRAPH_ID,
-		task: Partial<Task>
+	addTask(graphId: string, task: NewTask): Promise<Task> {
+		return this.request('POST', `/v0/${graphId}/task/add/`, task);
+	}
+
+	updateTask(graphId: string, taskId: string, task: TaskUpdate): Promise<Task> {
+		return this.request('PUT', `/v0/${graphId}/task/${taskId}`, task);
+	}
+
+	deleteTask(graphId: string, taskId: string): Promise<{ message: string }> {
+		return this.request('DELETE', `/v0/${graphId}/task/${taskId}`);
+	}
+
+	/** `dependency` blocks `dependee`; on the canvas the edge goes dependency → dependee. */
+	connectNodes(
+		graphId: string,
+		dependency: string,
+		dependee: string
 	): Promise<{ message: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/add/`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(task)
+		return this.request('POST', `/v0/${graphId}/connect_nodes/`, {
+			node_dependency: dependency,
+			node_dependee: dependee
 		});
-		return response.json();
 	}
 
-	async updateTask(
-		graphId: string = EXAMPLE_GRAPH_ID,
-		taskId: string,
-		task: Partial<Task>
+	disconnectNodes(
+		graphId: string,
+		dependency: string,
+		dependee: string
 	): Promise<{ message: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(task)
+		return this.request('POST', `/v0/${graphId}/disconnect_nodes/`, {
+			node_dependency: dependency,
+			node_dependee: dependee
 		});
-		return response.json();
-	}
-
-	async connectNodes(
-		graphId: string = EXAMPLE_GRAPH_ID,
-		source: string,
-		target: string
-	): Promise<{ message: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/connect_nodes/`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				node_dependency: source,
-				node_dependee: target
-			})
-		});
-		return response.json();
-	}
-
-	async deleteTask(
-		graphId: string = EXAMPLE_GRAPH_ID,
-		taskId: string
-	): Promise<{ message: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/task/${taskId}`, {
-			method: 'DELETE'
-		});
-		return response.json();
-	}
-
-	async disconnectNodes(
-		graphId: string = EXAMPLE_GRAPH_ID,
-		source: string,
-		target: string
-	): Promise<{ message: string }> {
-		const response = await fetch(`${this.baseUrl}/v0/${graphId}/disconnect_nodes/`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				node_dependency: source,
-				node_dependee: target
-			})
-		});
-		return response.json();
 	}
 }
 

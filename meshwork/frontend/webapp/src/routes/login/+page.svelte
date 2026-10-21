@@ -1,5 +1,6 @@
 <script>
 	import { Button, Card, Label, Input, Checkbox, A } from 'flowbite-svelte';
+	import { API_BASE_URL } from '$lib/api';
 
 	let isLogin = true;
 	let email = '';
@@ -19,7 +20,8 @@
 		}
 
 		try {
-			const response = await fetch('http://localhost:8000/login', {
+			// TODO: the backend has no /login endpoint yet
+			const response = await fetch(`${API_BASE_URL}/login`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -40,7 +42,7 @@
 			// Handle success (redirect, store token, etc.)
 			console.log('Success:', data);
 		} catch (err) {
-			error = err.message;
+			error = err instanceof Error ? err.message : String(err);
 		} finally {
 			loading = false;
 		}

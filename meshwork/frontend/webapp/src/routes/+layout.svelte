@@ -24,8 +24,8 @@
 
 <!-- Overlay -->
 {#if isDrawerOpen}
-	<div 
-		class="drawer-overlay" 
+	<div
+		class="drawer-overlay"
 		onclick={closeDrawer}
 		onkeydown={(e) => e.key === 'Escape' && closeDrawer()}
 		role="button"

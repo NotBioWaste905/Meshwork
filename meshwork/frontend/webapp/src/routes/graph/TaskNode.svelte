@@ -1,84 +1,63 @@
 <script lang="ts">
 	import { useSvelteFlow, type NodeProps, Handle, Position } from '@xyflow/svelte';
-	import { type Task, Status, api } from '$lib/api';
+	import { Status, api } from '$lib/api';
+	import type { TaskFlowNode } from './types';
 	import { Modal, Button } from 'flowbite-svelte';
-	// import { transformWithEsbuild } from 'vite';
 
-	let { id, data }: NodeProps<Task> = $props();
+	let { id, data }: NodeProps<TaskFlowNode> = $props();
 	let { updateNodeData } = useSvelteFlow();
 
-	// Get graph ID from the data passed from parent
-	let currentGraphId = data.graphId || 'abc123';
-
-	// Local state for editing
-	let isEditing = $state(false);
-	let editName = $state(data.name || '');
-	let editDescription = $state(data.description || '');
-
+	// Form state, filled from the task each time the modal opens
 	let editModal = $state(false);
+	let editName = $state('');
+	let editDescription = $state('');
+	let editStatus = $state(Status.TODO);
+	let editTags = $state('');
+	let editUsers = $state('');
 	let isSaving = $state(false);
 	let errorMessage = $state('');
 
-	async function saveTask() {
+	function splitList(value: string): string[] {
+		const items = value
+			.split(',')
+			.map((item) => item.trim())
+			.filter((item) => item);
+		return [...new Set(items)];
+	}
+
+	function openEditor() {
+		editName = data.name;
+		editDescription = data.description;
+		editStatus = data.status;
+		editTags = data.tags.join(', ');
+		editUsers = data.users.join(', ');
+		errorMessage = '';
+		editModal = true;
+	}
+
+	async function saveTask(event: SubmitEvent) {
+		event.preventDefault();
 		if (isSaving) return;
 
 		isSaving = true;
 		errorMessage = '';
 
 		try {
-			// Prepare the updated task data
-			const updatedTask = {
-				...data,
-				name: data.name,
-				description: data.description,
-				tags:
-					typeof data.tags === 'string'
-						? data.tags
-								.split(',')
-								.map((t) => t.trim())
-								.filter((t) => t)
-						: data.tags,
-				users:
-					typeof data.users === 'string'
-						? data.users
-								.split(',')
-								.map((u) => u.trim())
-								.filter((u) => u)
-						: data.users
-			};
-
-			// Call the backend API
-			const response = await api.updateTask(currentGraphId, id, updatedTask);
-
-			// Update the node data in the flow
-			updateNodeData(id, updatedTask);
-
-			// Close the modal
+			const saved = await api.updateTask(data.graph_id, id, {
+				name: editName,
+				description: editDescription,
+				status: editStatus,
+				tags: splitList(editTags),
+				users: splitList(editUsers)
+			});
+			updateNodeData(id, saved);
 			editModal = false;
-
-			console.log('Task updated successfully:', response);
 		} catch (error) {
 			console.error('Failed to update task:', error);
-			errorMessage = 'Failed to save task. Please try again.';
+			errorMessage = `Failed to save task: ${error instanceof Error ? error.message : error}`;
 		} finally {
 			isSaving = false;
 		}
-	}
-
-	function toggleEdit() {
-		if (isEditing) {
-			// Save changes
-			updateNodeData(id, {
-				...data,
-				name: editName,
-				description: editDescription
-			});
-		} else {
-			// Enter edit mode
-			editName = data.name || '';
-			editDescription = data.description || '';
-		}
-		isEditing = !isEditing;
 	}
 
 	function getStatusColor(status: string) {
@@ -99,7 +78,7 @@
 	}
 </script>
 
-<div class="task-node" style="border-left-color: {getStatusColor(Status[data.status])}">
+<div class="task-node" style="border-left-color: {getStatusColor(data.status)}">
 	<!-- Input handle for incoming dependencies -->
 	<Handle type="target" position={Position.Left} />
 
@@ -108,8 +87,8 @@
 
 	<div class="task-header">
 		<h3 class="task-title">{data.name || 'Unnamed Task'}</h3>
-		<button class="edit-btn" onclick={() => (editModal = true)}> ✎ </button>
-		<Modal title="Edit the task" bind:open={editModal} autoclose>
+		<button class="edit-btn" onclick={openEditor}> ✎ </button>
+		<Modal title="Edit the task" bind:open={editModal}>
 			<form class="flex flex-col space-y-2" onsubmit={saveTask}>
 				{#if errorMessage}
 					<div class="alert alert-error rounded bg-red-100 p-2 text-sm text-red-700">
@@ -120,26 +99,31 @@
 					type="text"
 					placeholder="Task name"
 					class="input input-bordered w-full"
-					bind:value={data.name}
+					bind:value={editName}
 					required
 				/>
 				<textarea
-					bind:value={data.description}
+					bind:value={editDescription}
 					class="textarea textarea-bordered w-full"
 					placeholder="Task description"
 					rows="3"
 				></textarea>
+				<select class="w-full" bind:value={editStatus}>
+					{#each Object.values(Status) as status (status)}
+						<option value={status}>{status}</option>
+					{/each}
+				</select>
 				<input
 					type="text"
 					placeholder="Tags (comma separated)"
 					class="input input-bordered w-full"
-					bind:value={data.tags}
+					bind:value={editTags}
 				/>
 				<input
 					type="text"
 					placeholder="Users (comma separated)"
 					class="input input-bordered w-full"
-					bind:value={data.users}
+					bind:value={editUsers}
 				/>
 				<Button type="submit" class="w-full" disabled={isSaving}>
 					{isSaving ? 'Saving...' : 'Save'}
@@ -148,33 +132,26 @@
 		</Modal>
 	</div>
 
-	{#if isEditing}
-		<textarea
-			bind:value={editDescription}
-			class="task-description-input nodrag"
-			placeholder="Task description"
-			rows="3"
-		></textarea>
-	{:else if data.description}
+	{#if data.description}
 		<p class="task-description">{data.description}</p>
 	{/if}
 
 	<div class="task-status">
 		<span class="status-badge" style="background-color: {getStatusColor(data.status)}">
-			{Status[data.status]}
+			{data.status}
 		</span>
 	</div>
 
 	<div class="task-details">
 		{#if data.tags && data.tags.length > 0}
 			<div class="task-tags">
-				{#each data.tags as tag}
+				{#each data.tags as tag (tag)}
 					<span class="tag">{tag}</span>
 				{/each}
 			</div>
 		{/if}
 		<div class="task-user">
-			{#each data.users as user}
+			{#each data.users as user (user)}
 				<span class="user">{user}</span>
 			{/each}
 		</div>
@@ -248,16 +225,6 @@
 		color: #6b7280;
 		margin: 0 0 8px 0;
 		line-height: 1.4;
-	}
-
-	.task-description-input {
-		width: 100%;
-		border: 1px solid #d1d5db;
-		border-radius: 4px;
-		padding: 6px 8px;
-		font-size: 12px;
-		margin-bottom: 8px;
-		resize: vertical;
 	}
 
 	.task-status {
