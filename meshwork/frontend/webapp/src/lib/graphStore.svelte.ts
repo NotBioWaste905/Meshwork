@@ -1,5 +1,6 @@
 import { api, ApiError, Status, type NewTask, type Task, type TaskUpdate } from './api';
 import { CURRENT_USER } from './mock';
+import { shortId } from './status';
 
 export type TaskFilter = 'all' | 'mine' | 'blocked';
 
@@ -85,6 +86,22 @@ class GraphStore {
 		return task.depends_on
 			.map((id) => this.byId.get(id))
 			.filter((t): t is Task => !!t && t.status !== Status.DONE);
+	}
+
+	/** One-line relation summary for board cards: what it waits on or blocks. */
+	note(task: Task): { text: string; warn: boolean } {
+		const open = this.openBlockers(task);
+		const blocks = (this.dependents.get(task.id) ?? []).filter((t) => t.status !== Status.DONE);
+		const ids = (list: Task[]) => list.map((t) => shortId(t)).join(', ');
+		if (task.status === Status.BLOCKED && open.length > 0) {
+			return { text: `Waits on ${ids(open)}`, warn: true };
+		}
+		if (task.tags.includes('chore')) return { text: 'Chore', warn: false };
+		if (task.status === Status.DONE) return { text: '', warn: false };
+		if (open.length > 0) return { text: `Waits on ${ids(open)}`, warn: false };
+		if (blocks.length > 0) return { text: `Blocks ${ids(blocks)}`, warn: false };
+		if (this.terminals.some((t) => t.id === task.id)) return { text: 'Terminal node', warn: false };
+		return { text: task.depends_on.length === 0 ? 'No dependencies' : '', warn: false };
 	}
 
 	async load(graphId: string) {
