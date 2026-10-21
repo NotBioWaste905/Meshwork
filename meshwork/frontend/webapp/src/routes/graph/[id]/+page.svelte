@@ -55,7 +55,6 @@
 	let terminal = $derived(graphStore.terminals.length === 1 ? graphStore.terminals[0] : undefined);
 	let chips = $derived<{ id: TaskFilter; label: string; count: number }[]>([
 		{ id: 'all', label: 'All tasks', count: graphStore.tasks.length },
-		{ id: 'mine', label: 'Mine', count: graphStore.mineCount },
 		{ id: 'blocked', label: 'Blocked', count: graphStore.blockedCount }
 	]);
 

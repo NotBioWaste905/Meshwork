@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { MEMBERS } from '$lib/mock';
-
 	let {
 		name,
 		size = 24,
@@ -14,18 +12,13 @@
 
 	const PALETTE = ['#0F766E', '#7A3FC4', '#B4530A', '#2349C7', '#A13A6B', '#3E6B1F'];
 
-	let member = $derived(MEMBERS.find((m) => m.name === name));
-	let initials = $derived(
-		member?.initials ??
-			(() => {
-				const words = name.trim().split(/\s+/).filter(Boolean);
-				const letters = words.length > 1 ? words[0][0] + words[1][0] : name.trim().slice(0, 2);
-				return letters.toUpperCase();
-			})()
-	);
+	let initials = $derived.by(() => {
+		const words = name.trim().split(/\s+/).filter(Boolean);
+		const letters = words.length > 1 ? words[0][0] + words[1][0] : name.trim().slice(0, 2);
+		return letters.toUpperCase();
+	});
 	let color = $derived(
-		member?.color ??
-			PALETTE[[...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % PALETTE.length]
+		PALETTE[[...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % PALETTE.length]
 	);
 </script>
 

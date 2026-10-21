@@ -1,9 +1,7 @@
 <script lang="ts">
 	import TopBar from './TopBar.svelte';
 	import Avatar from './Avatar.svelte';
-	import MockBadge from './MockBadge.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
-	import { MEMBERS } from '$lib/mock';
 
 	let { view }: { view: 'graph' | 'board' | 'table' } = $props();
 
@@ -13,6 +11,9 @@
 		{ id: 'board', label: 'Board', href: `${base}/board` },
 		{ id: 'table', label: 'Table', href: `${base}/table` }
 	]);
+	const MAX_AVATARS = 4;
+	let shown = $derived(graphStore.users.slice(0, MAX_AVATARS));
+	let hidden = $derived(graphStore.users.slice(MAX_AVATARS));
 </script>
 
 <TopBar>
@@ -41,14 +42,19 @@
 		</div>
 	{/snippet}
 	{#snippet right()}
-		<div class="flex items-center gap-2" aria-label="Members">
-			<div class="flex">
-				{#each MEMBERS as member, i (member.name)}
-					<span class={i > 0 ? '-ml-2' : ''}><Avatar name={member.name} size={30} ring /></span>
+		{#if shown.length > 0}
+			<div class="flex" role="group" aria-label="Assignees in this graph">
+				{#each shown as user, i (user)}
+					<span class={i > 0 ? '-ml-2' : ''}><Avatar name={user} size={30} ring /></span>
 				{/each}
+				{#if hidden.length > 0}
+					<span
+						class="bg-surface-2 text-ink-3 -ml-2 inline-flex size-[30px] items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold"
+						title={hidden.join(', ')}>+{hidden.length}</span
+					>
+				{/if}
 			</div>
-			<MockBadge note="Members: demo data, the API has no users yet" />
-		</div>
+		{/if}
 		<button
 			type="button"
 			class="btn btn-primary btn-sm"

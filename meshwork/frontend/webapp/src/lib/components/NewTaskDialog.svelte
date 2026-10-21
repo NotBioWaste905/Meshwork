@@ -2,7 +2,6 @@
 	import { tick } from 'svelte';
 	import { Status } from '$lib/api';
 	import { graphStore } from '$lib/graphStore.svelte';
-	import { CURRENT_USER, MEMBERS } from '$lib/mock';
 	import { shortId, STATUS_META } from '$lib/status';
 
 	let { onCreated }: { onCreated?: (id: string) => void } = $props();
@@ -11,7 +10,7 @@
 	let description = $state('');
 	let kind = $state<'task' | 'chore'>('task');
 	let status = $state<Status>(Status.TODO);
-	let assignee = $state(CURRENT_USER.name);
+	let assignee = $state('');
 	let blockers = $state<string[]>([]);
 	let tags = $state<string[]>([]);
 	let search = $state('');
@@ -37,7 +36,7 @@
 			description = '';
 			kind = 'task';
 			status = Status.TODO;
-			assignee = CURRENT_USER.name;
+			assignee = '';
 			blockers = [];
 			tags = [];
 			search = '';
@@ -67,7 +66,7 @@
 			description,
 			status,
 			tags: allTags,
-			users: assignee ? [assignee] : [],
+			users: assignee.trim() ? [assignee.trim()] : [],
 			depends_on: blockers
 		});
 		saving = false;
@@ -164,12 +163,20 @@
 					</div>
 					<div class="flex min-w-0 flex-col gap-1.5">
 						<label for="nt-assignee" class="text-sm font-medium">Assignee</label>
-						<select id="nt-assignee" class="field" bind:value={assignee}>
-							<option value="">Unassigned</option>
-							{#each MEMBERS as m (m.name)}
-								<option value={m.name}>{m.name}</option>
+						<input
+							id="nt-assignee"
+							type="text"
+							class="field"
+							placeholder="Unassigned"
+							list="nt-assignee-options"
+							autocomplete="off"
+							bind:value={assignee}
+						/>
+						<datalist id="nt-assignee-options">
+							{#each graphStore.users as user (user)}
+								<option value={user}></option>
 							{/each}
-						</select>
+						</datalist>
 					</div>
 				</div>
 
