@@ -84,7 +84,7 @@
 
 ## Гигиена репо
 
-- [ ] Удалить `meshwork/backend/` (legacy Python), когда Rust догонит функциональность; до тех пор — не трогать
+- [x] Удалить `meshwork/backend/` (legacy Python): Rust-бэкенд умеет всё, что умел он
 - [x] README: стек, запуск, API, процесс работы с ветками
 - [x] CI: `dtolnay/rust-toolchain`, `checkout@v4`, fmt/clippy, `rust-cache`, запуск на `main`/`dev` и PR в них
 - [x] CI для фронта: check, lint, build
