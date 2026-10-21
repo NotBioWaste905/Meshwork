@@ -9,7 +9,7 @@ statuses) check MISSION.md § «Идея графа»: it fixes `BLOCKS` / `PART
 ## Layout
 
 ```
-compose.yaml                 # backend + frontend + falkordb
+compose.yaml                 # backend + mcp + frontend + falkordb
 scripts/                     # backup-falkordb.sh, restore-falkordb.sh
 meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/main.rs                #   bootstrap: env, FalkorDB connection, server
@@ -25,18 +25,25 @@ meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyfl
   src/routes/graphs/         #   graph list (known to this browser, localStorage); new/: create
   src/routes/graph/          #   +page.svelte: redirect to last/new graph
                              #   [id]/: graph view, board/, table/, task/[taskId]/
+meshwork/mcp_rs/             # MCP server for AI agents (rmcp, axum 0.8), thin REST client of the backend
+                             #   see meshwork/mcp_rs/CLAUDE.md; Claude Code connects via root .mcp.json
 ```
 
 ## Commands
 
 ```bash
-docker compose up -d --build        # frontend :3000, backend :8000, FalkorDB :6379, FalkorDB UI :3001
+docker compose up -d --build        # frontend :3000, backend :8000, MCP :8080, FalkorDB :6379, UI :3001
 
 # backend (needs FalkorDB: docker compose up -d falkordb)
 cd meshwork/backend_rs
 FALKORDB_URL=falkor://localhost:6379 cargo run
 cargo clippy --all-targets -- -D warnings && cargo fmt
 cargo test -- --include-ignored     # integration tests need FalkorDB on localhost:6379
+
+# MCP server (needs the backend on :8000)
+cd meshwork/mcp_rs
+MCP_TOKENS=dev-token cargo run      # :8080/mcp; for Claude Code: export MESHWORK_MCP_TOKEN=dev-token
+cargo clippy --all-targets -- -D warnings && cargo fmt && cargo test
 
 # frontend
 cd meshwork/frontend/webapp
@@ -55,7 +62,7 @@ Frontend: `VITE_API_URL` (build time, default `http://localhost:8000`), see `.en
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)), on push and PR to `main`/`dev`:
 backend `cargo fmt --check`, `clippy -D warnings`, integration tests against a FalkorDB
-service container; frontend `npm run check`, `lint`, `build`. The FalkorDB version is pinned
+service container; mcp fmt, clippy, unit tests; frontend `npm run check`, `lint`, `build`. The FalkorDB version is pinned
 in both `compose.yaml` and `ci.yml` — keep them equal.
 
 ## Data model (as in code)
