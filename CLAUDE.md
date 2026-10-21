@@ -78,7 +78,9 @@ API (`/v0/...`): `POST create_graph`; `GET :graph/all_tasks`;
 апдейт, списки заменяются целиком, лишние поля игнорируются);
 `POST :graph/connect_nodes/` и `disconnect_nodes/` с
 `{node_dependency, node_dependee}` — dependency блокирует dependee, на
-канвасе ребро идёт dependency → dependee. Ошибки — `{message}` с 400/404/500.
+канвасе ребро идёт dependency → dependee. Ошибки — `{message}` с 400/404/500;
+409 — если новая зависимость замкнула бы цикл `DEPENDS_ON` (граф
+зависимостей всегда DAG).
 
 `DEPENDS_ON` — это и есть блокирующее ребро, которое MISSION.md называет
 `BLOCKS`: `(a)-[:DEPENDS_ON]->(b)` означает «b блокирует a». Имя в коде

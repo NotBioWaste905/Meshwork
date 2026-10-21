@@ -150,6 +150,7 @@ async fn edit_task(
             ));
         }
         db::ensure_tasks_in_graph(&mut graph, &graph_id, deps).await?;
+        ensure_no_cycle(&mut graph, &task_id, deps).await?;
     }
 
     db::update_task_props(
@@ -169,6 +170,22 @@ async fn edit_task(
     }
 
     Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
+}
+
+/// Rejects making `task_id` depend on any of `depends_on` if that would
+/// close a `DEPENDS_ON` cycle.
+async fn ensure_no_cycle(
+    graph: &mut AsyncGraph,
+    task_id: &str,
+    depends_on: &[String],
+) -> Result<()> {
+    if let Some(dep) = db::find_cycle(graph, task_id, depends_on).await? {
+        return Err(AppError::Conflict(format!(
+            "Task {} already depends on {}, the dependency would create a cycle",
+            dep, task_id
+        )));
+    }
+    Ok(())
 }
 
 async fn delete_task(
@@ -208,6 +225,12 @@ async fn connect_nodes(
             request.node_dependee.clone(),
             request.node_dependency.clone(),
         ],
+    )
+    .await?;
+    ensure_no_cycle(
+        &mut graph,
+        &request.node_dependee,
+        std::slice::from_ref(&request.node_dependency),
     )
     .await?;
     db::connect(&mut graph, &request.node_dependee, &request.node_dependency).await?;

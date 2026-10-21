@@ -314,3 +314,65 @@ async fn cors_allows_frontend_origin() {
     );
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn dependency_cycles_are_rejected() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    // c depends on b, b depends on a.
+    let a = app.add_task(&graph_id, json!({ "name": "A" })).await;
+    let b = app
+        .add_task(&graph_id, json!({ "name": "B", "depends_on": [a.id] }))
+        .await;
+    let c = app
+        .add_task(&graph_id, json!({ "name": "C", "depends_on": [b.id] }))
+        .await;
+    let connect = format!("/v0/{graph_id}/connect_nodes/");
+
+    // a -> c would close a -> c -> b -> a.
+    let (status, body) = app
+        .call(
+            Method::POST,
+            &connect,
+            Some(json!({ "node_dependency": c.id, "node_dependee": a.id })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+
+    // Same through editing, also for a direct two-node cycle.
+    let a_uri = format!("/v0/{graph_id}/task/{}", a.id);
+    for dep in [&b.id, &c.id] {
+        let (status, _) = app
+            .call(Method::PUT, &a_uri, Some(json!({ "depends_on": [dep] })))
+            .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+    }
+    let tasks = app.all_tasks(&graph_id).await;
+    assert!(tasks
+        .iter()
+        .find(|t| t.id == a.id)
+        .unwrap()
+        .depends_on
+        .is_empty());
+
+    // A diamond is fine: c may depend on a directly as well.
+    let (status, _) = app
+        .call(
+            Method::POST,
+            &connect,
+            Some(json!({ "node_dependency": a.id, "node_dependee": c.id })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    // Re-saving b with its current dependencies is not a cycle either.
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{graph_id}/task/{}", b.id),
+            Some(json!({ "depends_on": [a.id] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    app.cleanup().await;
+}
