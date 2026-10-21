@@ -1,8 +1,69 @@
-- [x] docker backend endpoint
-- [x] custom task-nodes
-- [x] frontend and backend API connection
-- [x] node connection
-- [x] task editing
-- [x] task layout
-- [ ] task graph creation (multigraph support/auth)
-- [ ] move to neo4j
+# Meshwork — бэклог
+
+Цель MVP (из [MISSION.md](MISSION.md)): рабочий цикл
+**граф → канбан/таблица → лог изменений → верификация**.
+Порядок фаз — порядок работы; внутри фазы — примерно по приоритету.
+
+## Сделано
+
+- [x] Python/FastAPI бэкенд (in-memory), кастомные ноды задач, связь фронт ↔ бэк
+- [x] Соединение/разъединение нод, редактирование задач, авто-лейаут (dagre)
+- [x] Каркас Rust-бэкенда (axum), `create_graph`, `add_task`, `get_all_tasks`
+- [x] Neo4j → FalkorDB (compose, драйвер)
+- [x] Фаза 0 (см. ниже)
+
+## Фаза 0 — снова работает end-to-end
+
+Фронт и Rust-бэкенд говорят на одном контракте; проверено в браузере через `docker compose`.
+
+- [ ] Влить ветку `falkordb` в `main` (CI сейчас гоняется только на `main`)
+- [x] CORS в Rust, origins из `CORS_ALLOW_ORIGINS`
+- [x] Единый контракт `Task`: `id` от сервера, списки опциональны, `graph_id` из пути, `Status` — `SCREAMING_SNAKE_CASE` строки
+- [x] Реализованы `get_task`, `edit_task` (частичный апдейт), `delete_task`, `connect_nodes`, `disconnect_nodes`
+- [x] 404 на несуществующий граф/задачу, 400 на пустое имя и self-dependency
+- [x] Фронт: graph id в URL (`/graph/[id]`), `/graph` открывает последний граф или создаёт новый
+- [x] Фронт: `VITE_API_URL`, ошибки API показываются в тулбаре
+- [x] `tags` сохраняются
+- [x] Интеграционные тесты хендлеров против FalkorDB (`cargo test -- --ignored`)
+- [x] Docker: `.dockerignore`, фронт собирается без хостового `node_modules`, `rust:1.99` запинен
+- [ ] Гонять интеграционные тесты в CI (service container FalkorDB)
+
+## Фаза 1 — модель данных по MISSION
+
+- [ ] Запрет циклов на `DEPENDS_ON` при `connect_nodes`
+- [ ] `DEPENDS_ON` только внутри одного проекта/дерева
+- [ ] `AFFECTS` — межпроектное ребро без влияния на готовность
+- [ ] `PART_OF` между задачами (вложенность), «провалиться в ноду» = подграф потомков
+- [ ] Убрать различие `Graph` vs `Task`: проект — это нода с `DEPENDS_ON` на своих детей (решить, нужна ли `:Graph` как корень/воркспейс)
+- [ ] Frontier: эндпоинт «готовые к работе задачи» (все `DEPENDS_ON`-зависимости закрыты)
+- [ ] `CHORE`-ноды: каденс, не блокируют
+- [ ] Индексы FalkorDB на `Task.id`, `Graph.id`
+
+## Фаза 2 — MVP-цикл
+
+- [ ] Лог изменений: решить хранилище (ноды-события в FalkorDB vs append-only store), писать событие на каждое изменение задачи/рёбер
+- [ ] История задачи в UI
+- [ ] Верификация: `done` только через явное подтверждение (`REVIEW` → approve/reject), кто подтвердил — в лог
+- [ ] Канбан-вью поверх той же модели
+- [ ] Табличное вью с фильтрами/сортировкой
+- [ ] Пользователи и авторизация (сейчас `User` — просто строка-id; `/login` на фронте шлёт запрос в несуществующий эндпоинт)
+
+## Позже / исследование
+
+- [ ] Кастомные поля (`FieldDefinition` на уровне проекта?) — см. MISSION § «Открытые вопросы»
+- [ ] Artifact-based верификация через GitHub/GitLab (PR, CI-статусы)
+- [ ] Анализ графа: узкие места, задачи без движения
+- [ ] Дедлайны/эскалации
+
+## Гигиена репо
+
+- [ ] Удалить `meshwork/backend/` (legacy Python), когда Rust догонит функциональность; до тех пор — не трогать
+- [ ] README: актуализировать (стек, порты, фронт на :3000, убрать обещания про автоматизацию как фичи)
+- [ ] CI: `actions-rs` (deprecated) → `dtolnay/rust-toolchain`, `actions/checkout@v4`, добавить `clippy`/`fmt --check`, кеш `target`, запуск на всех ветках/PR
+- [ ] CI для фронта: `npm run check` + `npm run lint`
+- [ ] Rust Dockerfile: multi-stage; запинить `falkordb/falkordb` в compose; `node:19` → LTS
+- [ ] Апгрейд axum 0.6 → 0.8 (+ tower-http 0.6)
+- [ ] Удалить неиспользуемые страницы-заглушки фронта (`pricing`, `contact`, `account`) или пометить как TODO
+- [ ] `.zed/` в `.gitignore`, но `.zed/settings.json` закоммичен — выбрать одно
+- [ ] Фронт: инлайн-ошибки svelte-check/eslint в `account/` (each без key), неиспользуемый CSS в графе
+- [ ] Позиции нод не сохраняются — после перезагрузки раскладка сбрасывается

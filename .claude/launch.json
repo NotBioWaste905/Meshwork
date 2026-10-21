@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd meshwork/backend_rs && FALKORDB_URL=falkor://localhost:6379 cargo run"],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd meshwork/frontend/webapp && npm run dev -- --port 5173 --strictPort"],
+      "port": 5173
+    }
+  ]
+}

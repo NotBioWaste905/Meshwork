@@ -1,6 +1,6 @@
 # Meshwork — Architecture (C4)
 
-Срез архитектуры на текущий момент (ветка `neo4j`, бэкенд переезжает на
+Срез архитектуры на текущий момент (ветка `falkordb`, бэкенд переезжает на
 Rust). Не путать с [MISSION.md](../MISSION.md) — там продуктовое видение,
 здесь — как оно устроено технически. Диаграммы будут расходиться с кодом
 по мере разработки, актуализировать по факту значимых изменений.
@@ -37,15 +37,15 @@ C4Container
 
     System_Boundary(meshwork, "Meshwork") {
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
-        Container(backend, "Backend API", "Rust, axum, falkordb", "REST-эндпоинты graph/task CRUD, connect/disconnect nodes")
-        Container(backend_legacy, "Legacy Backend", "Python (FastAPI?), core/graph.py, core/task.py", "Прежняя реализация, источник миграции логики, не в проде")
-        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser :3000)", "Хранит ноды задач/проектов и рёбра BLOCKS/PART_OF/AFFECTS")
+        Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей")
+        Container(backend_legacy, "Legacy Backend", "Python, FastAPI, networkx (in-memory)", "Прежняя реализация, источник миграции логики, не в проде")
+        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/User, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")
     Rel(frontend, backend, "REST /v0/...", "JSON over HTTP :8000")
     Rel(backend, db, "Redis protocol", "falkordb crate (async)")
-    Rel(backend_legacy, db, "не подключен активно", "referенце-код")
+    Rel(backend_legacy, db, "не подключен", "референс-код")
 ```
 
 ## Level 2 — Containers (целевое, по MISSION.md)
@@ -90,4 +90,4 @@ C4Container
 - **Legacy Python backend** (`meshwork/backend/`): статус миграции неясен
   — рассматривать как источник для переноса логики или выпилить, когда
   Rust-бэкенд догонит функциональность (`create_graph`/`add_task`/`get_all_tasks`
-  уже есть, остального — нет).
+  уже есть, плюс CRUD задач и connect/disconnect; Python-бэкенд больше ничего не умеет сверх этого).
