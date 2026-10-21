@@ -19,3 +19,47 @@ export const MEMBERS: Member[] = [
 	{ name: 'Sofia Lindqvist', initials: 'SL', color: '#B4530A' },
 	{ name: 'Andrei Chirkin', initials: 'AC', color: '#2349C7' }
 ];
+
+export type MockGraph = {
+	name: string;
+	goal: string;
+	done: number;
+	total: number;
+	color: string;
+	blocked: number;
+	updated: string;
+};
+
+/** MOCK: example graphs for the home screen. There is no "list graphs" endpoint. */
+export const MOCK_GRAPHS: MockGraph[] = [
+	{
+		name: 'Platform storage',
+		goal: 'Zero-downtime failover',
+		done: 12,
+		total: 18,
+		color: '#0F766E',
+		blocked: 0,
+		updated: 'Updated yesterday'
+	},
+	{
+		name: 'Q4 growth',
+		goal: 'Reach 50k active users',
+		done: 5,
+		total: 24,
+		color: '#7A3FC4',
+		blocked: 5,
+		updated: 'Updated 2 h ago'
+	},
+	{
+		name: 'Security audit',
+		goal: 'Pass external audit',
+		done: 8,
+		total: 9,
+		color: '#B4530A',
+		blocked: 0,
+		updated: 'Updated 3 days ago'
+	}
+];
+
+/** MOCK: starting points offered on the new-graph screen. There are no templates in the backend. */
+export const GRAPH_TEMPLATES = ['Software release', 'Hiring pipeline', 'Incident response'];

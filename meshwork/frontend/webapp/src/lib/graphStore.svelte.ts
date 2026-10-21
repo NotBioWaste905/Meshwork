@@ -230,3 +230,41 @@ export function criticalPath(tasks: Task[]): string[] {
 	}
 	return best.length > 1 ? best : [];
 }
+
+export type GraphSummary = {
+	id: string;
+	name: string;
+	goal: string;
+	done: number;
+	total: number;
+	blocked: number;
+};
+
+/** Name and progress of a graph from its tasks. The API has no graph metadata. */
+export function summarize(graphId: string, tasks: Task[]): GraphSummary {
+	const dependedOn = new Set(tasks.flatMap((t) => t.depends_on));
+	const goals = tasks.filter((t) => !dependedOn.has(t.id) && t.depends_on.length > 0);
+	const goal = goals[0]?.name ?? tasks[0]?.name ?? 'No tasks yet';
+	return {
+		id: graphId,
+		name: goal,
+		goal,
+		done: tasks.filter((t) => t.status === Status.DONE).length,
+		total: tasks.length,
+		blocked: tasks.filter((t) => t.status === Status.BLOCKED).length
+	};
+}
+
+/** Open tasks of the user that hold up other open tasks. */
+export function blockingOthers(tasks: Task[]): { task: Task; blocks: number }[] {
+	const byId = new Map(tasks.map((t) => [t.id, t]));
+	const result: { task: Task; blocks: number }[] = [];
+	for (const task of tasks) {
+		if (task.status === Status.DONE || !isMine(task)) continue;
+		const blocks = tasks.filter(
+			(t) => t.status !== Status.DONE && t.depends_on.includes(task.id) && byId.has(t.id)
+		).length;
+		if (blocks > 0) result.push({ task, blocks });
+	}
+	return result;
+}
