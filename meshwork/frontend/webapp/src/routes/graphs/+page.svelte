@@ -1,36 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api, ApiError } from '$lib/api';
-	import {
-		forgetKnownGraph,
-		knownGraphIds,
-		summarize,
-		type GraphSummary
-	} from '$lib/graphStore.svelte';
+	import { api, type Graph } from '$lib/api';
 
 	const COLORS = ['#2349C7', '#0F766E', '#7A3FC4', '#B4530A'];
 
-	let graphs = $state<GraphSummary[]>([]);
+	let graphs = $state<Graph[]>([]);
 	let loading = $state(true);
+	let error = $state('');
 	let query = $state('');
 
+	/** Graphs created before graphs had names fall back to their short ID. */
+	const title = (g: Graph) => g.name || `Graph ${g.id.slice(0, 8)}`;
+
 	let matching = $derived(
-		graphs.filter((g) => g.name.toLowerCase().includes(query.trim().toLowerCase()))
+		graphs.filter((g) => title(g).toLowerCase().includes(query.trim().toLowerCase()))
 	);
 
 	onMount(async () => {
-		// There is no "list graphs" endpoint: show the graphs this browser has opened.
-		const loaded = await Promise.all(
-			knownGraphIds().map(async (id) => {
-				try {
-					return { id, tasks: await api.getAllTasks(id) };
-				} catch (error) {
-					if (error instanceof ApiError && error.status === 404) forgetKnownGraph(id);
-					return null;
-				}
-			})
-		);
-		graphs = loaded.filter((g) => g !== null).map((g) => summarize(g.id, g.tasks));
+		try {
+			graphs = await api.listGraphs();
+		} catch (e) {
+			error = `Failed to load graphs: ${e instanceof Error ? e.message : e}`;
+		}
 		loading = false;
 	});
 
@@ -41,7 +32,6 @@
 
 {#snippet card(
 	name: string,
-	goal: string,
 	done: number,
 	total: number,
 	blocked: number,
@@ -80,8 +70,8 @@
 		/>
 	</svg>
 	<div class="flex flex-col gap-1">
+		<div class="text-muted text-xs font-medium tracking-wide uppercase">Goal</div>
 		<div class="text-lg font-semibold">{name}</div>
-		<div class="text-muted text-sm">Goal: {goal}</div>
 	</div>
 	<div class="flex flex-col gap-2">
 		<div class="text-ink-3 flex justify-between text-[13px]">
@@ -143,15 +133,24 @@
 				href="/graph/{g.id}"
 				class="card text-ink hover:border-line-strong flex flex-col gap-4 p-5 no-underline"
 			>
-				{@render card(g.name, g.goal, g.done, g.total, g.blocked, COLORS[i % COLORS.length], g.id)}
+				{@render card(
+					title(g),
+					g.done_count,
+					g.task_count,
+					g.blocked_count,
+					COLORS[i % COLORS.length],
+					g.id
+				)}
 			</a>
 		{/each}
-		{#if !loading && graphs.length === 0}
+		{#if error}
+			<div class="bg-st-blocked-bg text-danger col-span-full rounded-lg p-3 text-sm" role="alert">
+				{error}
+			</div>
+		{:else if !loading && graphs.length === 0}
 			<div class="card col-span-full flex flex-col items-start gap-2 p-6">
-				<strong class="font-semibold">No graphs opened in this browser yet</strong>
-				<span class="text-muted text-sm"
-					>The API cannot list graphs, so only graphs you opened here appear.</span
-				>
+				<strong class="font-semibold">No graphs yet</strong>
+				<span class="text-muted text-sm">A graph is one goal and every task that leads to it.</span>
 				<a href="/graphs/new" class="btn btn-primary btn-sm mt-2">Create the first graph</a>
 			</div>
 		{:else if !loading && matching.length === 0}

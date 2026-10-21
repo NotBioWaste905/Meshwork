@@ -2,6 +2,7 @@
 #![recursion_limit = "256"]
 
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
     http::{HeaderValue, StatusCode},
     routing::{get, post},
@@ -22,7 +23,8 @@ pub mod schemas;
 
 use error::{AppError, Result};
 use schemas::{
-    ConnectNodesRequest, CreateGraphResponse, MessageResponse, NewTask, Task, TaskUpdate,
+    ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate, MessageResponse, NewGraph,
+    NewTask, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -50,6 +52,8 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/", get(root))
         .route("/health", get(health))
         .route("/v0/create_graph", post(create_graph))
+        .route("/v0/graphs", get(list_graphs))
+        .route("/v0/:graph_id", get(get_graph).put(edit_graph))
         .route("/v0/:graph_id/task/add/", post(add_task))
         .route("/v0/:graph_id/all_tasks", get(get_all_tasks))
         .route("/v0/:graph_id/ready_tasks", get(get_ready_tasks))
@@ -72,12 +76,56 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "healthy", "service": "meshwork-backend" }))
 }
 
-async fn create_graph(State(state): State<AppState>) -> Result<Json<CreateGraphResponse>> {
+/// The body is optional: no body (or an empty one) creates a graph without a name, so
+/// clients written before graphs had names keep working.
+async fn create_graph(
+    State(state): State<AppState>,
+    body: Bytes,
+) -> Result<Json<CreateGraphResponse>> {
+    let new_graph: NewGraph = if body.iter().all(u8::is_ascii_whitespace) {
+        NewGraph::default()
+    } else {
+        serde_json::from_slice(&body)
+            .map_err(|e| AppError::BadRequest(format!("Invalid graph body: {}", e)))?
+    };
+    let name = new_graph.name.trim().to_string();
     let id = Uuid::new_v4().to_string();
     info!("Creating new graph with ID: {}", id);
     let mut graph = state.graph.clone();
-    db::create_graph(&mut graph, &id).await?;
-    Ok(Json(CreateGraphResponse { id }))
+    db::create_graph(&mut graph, &id, &name).await?;
+    Ok(Json(CreateGraphResponse { id, name }))
+}
+
+async fn list_graphs(State(state): State<AppState>) -> Result<Json<Vec<GraphInfo>>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::list_graphs(&mut graph).await?))
+}
+
+async fn get_graph(
+    State(state): State<AppState>,
+    Path(graph_id): Path<String>,
+) -> Result<Json<GraphInfo>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
+}
+
+async fn edit_graph(
+    State(state): State<AppState>,
+    Path(graph_id): Path<String>,
+    Json(update): Json<GraphUpdate>,
+) -> Result<Json<GraphInfo>> {
+    info!("Editing graph '{}'", graph_id);
+    if matches!(&update.name, Some(name) if name.trim().is_empty()) {
+        return Err(AppError::BadRequest(
+            "Graph name cannot be empty".to_string(),
+        ));
+    }
+    let mut graph = state.graph.clone();
+    db::ensure_graph(&mut graph, &graph_id).await?;
+    if let Some(name) = &update.name {
+        db::rename_graph(&mut graph, &graph_id, name.trim()).await?;
+    }
+    Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
 }
 
 async fn add_task(

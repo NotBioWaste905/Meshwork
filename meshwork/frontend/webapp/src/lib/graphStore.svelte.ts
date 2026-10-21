@@ -1,41 +1,13 @@
-import { api, ApiError, Status, type NewTask, type Task, type TaskUpdate } from './api';
+import { api, ApiError, Status, type Graph, type NewTask, type Task, type TaskUpdate } from './api';
 import { shortId } from './status';
 
 export type TaskFilter = 'all' | 'blocked';
 
-const KNOWN_GRAPHS_KEY = 'meshwork:knownGraphs';
-
-/** Graph IDs this browser has opened. There is no "list graphs" endpoint yet. */
-export function knownGraphIds(): string[] {
-	try {
-		const parsed = JSON.parse(localStorage.getItem(KNOWN_GRAPHS_KEY) ?? '[]');
-		return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
-	} catch {
-		return [];
-	}
-}
-
-export function rememberKnownGraph(graphId: string) {
-	try {
-		const ids = knownGraphIds().filter((id) => id !== graphId);
-		localStorage.setItem(KNOWN_GRAPHS_KEY, JSON.stringify([graphId, ...ids].slice(0, 20)));
-	} catch {
-		// storage unavailable, nothing to remember
-	}
-}
-
-export function forgetKnownGraph(graphId: string) {
-	try {
-		const ids = knownGraphIds().filter((id) => id !== graphId);
-		localStorage.setItem(KNOWN_GRAPHS_KEY, JSON.stringify(ids));
-	} catch {
-		// storage unavailable
-	}
-}
-
 /** The tasks of the open graph, shared by the Graph, Board, Table and Task screens. */
 class GraphStore {
 	graphId = $state('');
+	/** Graph metadata; null until loaded. Its counters are not kept up to date here. */
+	graph = $state.raw<Graph | null>(null);
 	tasks = $state.raw<Task[]>([]);
 	loaded = $state(false);
 	notFound = $state(false);
@@ -62,10 +34,11 @@ class GraphStore {
 		this.tasks.filter((t) => t.depends_on.length > 0 && !this.dependents.has(t.id))
 	);
 
-	/** The graph has no name in the API, so it is called after its goal. */
+	/** The graph's name; graphs created without one are called after their goal task. */
 	name = $derived(
-		this.terminals[0]?.name ??
-			(this.tasks.length === 1 ? this.tasks[0].name : `Graph ${this.graphId.slice(0, 8)}`)
+		this.graph?.name ||
+			(this.terminals[0]?.name ??
+				(this.tasks.length === 1 ? this.tasks[0].name : `Graph ${this.graphId.slice(0, 8)}`))
 	);
 
 	/** Distinct assignees of the graph's tasks. Users are free-form names, there is no user API. */
@@ -96,19 +69,20 @@ class GraphStore {
 	async load(graphId: string) {
 		if (graphId !== this.graphId) {
 			this.graphId = graphId;
+			this.graph = null;
 			this.tasks = [];
 			this.loaded = false;
 			this.notFound = false;
 			this.filter = 'all';
 		}
 		try {
-			this.tasks = await api.getAllTasks(graphId);
+			const [graph, tasks] = await Promise.all([api.getGraph(graphId), api.getAllTasks(graphId)]);
+			this.graph = graph;
+			this.tasks = tasks;
 			this.error = '';
-			rememberKnownGraph(graphId);
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 404) {
 				this.notFound = true;
-				forgetKnownGraph(graphId);
 			} else {
 				this.fail('load tasks', error);
 			}
@@ -231,30 +205,6 @@ export function criticalPath(tasks: Task[]): string[] {
 		if (chain.length > best.length) best = chain;
 	}
 	return best.length > 1 ? best : [];
-}
-
-export type GraphSummary = {
-	id: string;
-	name: string;
-	goal: string;
-	done: number;
-	total: number;
-	blocked: number;
-};
-
-/** Name and progress of a graph from its tasks. The API has no graph metadata. */
-export function summarize(graphId: string, tasks: Task[]): GraphSummary {
-	const dependedOn = new Set(tasks.flatMap((t) => t.depends_on));
-	const goals = tasks.filter((t) => !dependedOn.has(t.id) && t.depends_on.length > 0);
-	const goal = goals[0]?.name ?? tasks[0]?.name ?? 'No tasks yet';
-	return {
-		id: graphId,
-		name: goal,
-		goal,
-		done: tasks.filter((t) => t.status === Status.DONE).length,
-		total: tasks.length,
-		blocked: tasks.filter((t) => t.status === Status.BLOCKED).length
-	};
 }
 
 /** What a task waits on or blocks, as one short line. `tasks` is the whole graph of the task. */

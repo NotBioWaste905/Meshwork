@@ -22,7 +22,7 @@ meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
 meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre
   src/lib/api.ts             #   the only HTTP client, mirrors schemas.rs
   src/lib/graphStore.svelte.ts #  tasks of the open graph, shared by all graph screens
-  src/routes/graphs/         #   graph list (known to this browser, localStorage); new/: create
+  src/routes/graphs/         #   graph list (GET /v0/graphs); new/: create a named graph
   src/routes/graph/          #   +page.svelte: redirect to last/new graph
                              #   [id]/: graph view, board/, table/, task/[taskId]/
 meshwork/mcp_rs/             # MCP server for AI agents (rmcp, axum 0.8), thin REST client of the backend
@@ -68,7 +68,8 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 ## Data model (as in code)
 
 ```
-(:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph {id})
+(:Graph {id, name, created_at})     # name is the goal, "" for unnamed/older graphs
+(:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph)
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:User {id})
 ```
@@ -80,7 +81,11 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 "b blocks a". Keep the name `DEPENDS_ON`, do not rename it.
 
 API (`/v0/...`):
-- `POST create_graph`; `GET :graph/all_tasks`
+- `POST create_graph` — optional body `{name}` (no body / empty body = unnamed graph);
+  returns `{ID, name}`
+- `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count}]`
+- `GET :graph` — one graph in the same shape; `PUT :graph` with `{name}` renames (blank → 400)
+- `GET :graph/all_tasks`
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`
 - `POST :graph/task/add/` — body `NewTask`, only `name` required; returns the created `Task`, 201
 - `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored
