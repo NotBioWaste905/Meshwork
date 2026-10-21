@@ -37,6 +37,11 @@ docker compose up -d --build
 | Backend API | http://localhost:8000 |
 | FalkorDB browser | http://localhost:3001 |
 
+Data lives in the `meshwork_falkordb_data` Docker volume, with an append-only
+file so at most about a second of writes is lost on a crash. Back it up with
+`scripts/backup-falkordb.sh`; see [docs/operations.md](docs/operations.md)
+(in Russian). **`docker compose down -v` deletes the volume and all data.**
+
 ## Development
 
 Run FalkorDB in Docker and the apps locally:

@@ -17,6 +17,10 @@ services:
       - backend
   falkordb:
     image: falkordb/falkordb:v4.22.2 # keep in sync with .github/workflows/ci.yml
+    environment:
+      # Append-only file: every write hits disk within ~1s. An existing volume with
+      # only dump.rdb must be migrated first, see docs/operations.md.
+      - REDIS_ARGS=--appendonly yes --appendfsync everysec
     volumes:
       - falkordb_data:/var/lib/falkordb/data
     ports:

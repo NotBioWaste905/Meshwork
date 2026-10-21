@@ -11,6 +11,7 @@ MISSION.md § «Идея графа»: там зафиксированы `BLOCKS
 
 ```
 compose.yaml                 # backend + frontend + falkordb
+scripts/                     # backup-falkordb.sh, restore-falkordb.sh
 meshwork/backend_rs/         # Активный бэкенд: Rust, axum 0.6, falkordb crate
   src/main.rs                #   бутстрап: env, подключение к FalkorDB, запуск сервера
   src/lib.rs                 #   роутер (app()), CORS, HTTP-хендлеры
@@ -91,6 +92,11 @@ API (`/v0/...`): `POST create_graph`; `GET :graph/all_tasks`;
 
 ## Нюансы и грабли
 
+- **Данные FalkorDB** — в томе `meshwork_falkordb_data`, с AOF (журнал).
+  Бэкап/восстановление — `scripts/backup-falkordb.sh` и
+  `scripts/restore-falkordb.sh`, подробности в [docs/operations.md](docs/operations.md).
+  Никогда не запускай `docker compose down -v` и не включай AOF на томе,
+  где есть только `dump.rdb`: Redis поднимет пустую базу.
 - **FalkorDB, не Neo4j.** Переезд
   Neo4j → FalkorDB сделан. Cypher почти тот же, но драйвер — `falkordb`
   (Redis-протокол), транзакций на несколько запросов нет: каждый
