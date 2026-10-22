@@ -10,7 +10,7 @@ statuses) check MISSION.md § «Идея графа»: it fixes `BLOCKS` / `PART
 
 ```
 compose.yaml                 # backend + mcp + frontend + falkordb
-scripts/                     # backup-falkordb.sh, restore-falkordb.sh
+scripts/                     # backup-falkordb.sh, restore-falkordb.sh, mcp-token.sh
 meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/main.rs                #   bootstrap: env, FalkorDB connection, server
   src/lib.rs                 #   router (app()), CORS, HTTP handlers
@@ -48,7 +48,8 @@ cargo test -- --include-ignored     # integration tests need FalkorDB on localho
 # MCP server (needs the backend on :8000)
 cd meshwork/mcp_rs
 cargo run                           # :8080/mcp; clients send an actor token (see Auth)
-# Claude Code: export MESHWORK_MCP_TOKEN=$(docker compose exec -T backend meshwork-token create claude)
+# Claude Code: scripts/mcp-token.sh [--launchctl] → .mcp-token, then set MESHWORK_MCP_TOKEN and
+# restart Claude Code (the desktop app reads launchd's env, not the shell's; docs/operations.md)
 cargo clippy --all-targets -- -D warnings && cargo fmt && cargo test
 
 # frontend

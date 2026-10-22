@@ -7,3 +7,7 @@ dist/
 
 # Rust
 target
+
+# Meshwork MCP tokens (scripts/mcp-token.sh)
+.mcp-token
+claude_token
