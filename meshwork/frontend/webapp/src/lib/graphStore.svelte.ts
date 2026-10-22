@@ -9,6 +9,7 @@ import {
 	type Task,
 	type TaskUpdate
 } from './api';
+import { mergeById } from './liveRefresh';
 import { shortId } from './status';
 
 export type TaskFilter = 'all' | 'blocked';
@@ -25,6 +26,14 @@ class GraphStore {
 	filter = $state<TaskFilter>('all');
 	/** The new-task dialog, rendered by the graph layout. */
 	newTaskOpen = $state(false);
+
+	/** Reasons background refresh is paused: open edit forms, a drag on the canvas. */
+	private holds = new Set<symbol>();
+	/** Own requests in flight; a refresh racing them could bring back stale data. */
+	private pending = 0;
+	/** Bumped by every own write, so a refresh that overlapped one is dropped. */
+	private epoch = 0;
+	private refreshing = false;
 
 	byId = $derived(new Map(this.tasks.map((task) => [task.id, task])));
 
@@ -89,7 +98,60 @@ class GraphStore {
 		return describeRelations(task, this.tasks);
 	}
 
+	/**
+	 * Pauses background refresh until the returned function is called. Use it around in-progress
+	 * edits, e.g. `$effect(() => { if (editing) return graphStore.hold(); })`.
+	 */
+	hold(): () => void {
+		const key = Symbol();
+		this.holds.add(key);
+		return () => this.holds.delete(key);
+	}
+
+	/**
+	 * Quietly re-fetches the open graph to pick up changes made elsewhere (agents via MCP/REST,
+	 * other tabs). Skipped while an edit holds it or an own write is in flight; unchanged tasks
+	 * keep their objects, so a refresh that finds nothing new triggers no re-render.
+	 */
+	async refresh() {
+		const graphId = this.graphId;
+		if (!graphId || !this.loaded || this.notFound || this.refreshing) return;
+		if (this.holds.size > 0 || this.pending > 0) return;
+		const epoch = this.epoch;
+		this.refreshing = true;
+		try {
+			const [graph, tasks, actors] = await Promise.all([
+				api.getGraph(graphId),
+				api.getAllTasks(graphId),
+				api.listActors()
+			]);
+			// another graph opened, an own write overlapped, or an edit began meanwhile
+			if (graphId !== this.graphId || epoch !== this.epoch || this.holds.size > 0) return;
+			if (graph.name !== this.graph?.name) this.graph = graph;
+			this.tasks = mergeById(this.tasks, tasks);
+			this.actors = mergeById(this.actors, actors);
+		} catch (error) {
+			// background refresh: keep the current data, the next tick tries again
+			console.warn('Background refresh failed:', error);
+		} finally {
+			this.refreshing = false;
+		}
+	}
+
+	/** Wraps an own API call so background refreshes neither race nor overwrite it. */
+	private async write<T>(request: () => Promise<T>): Promise<T> {
+		this.pending++;
+		this.epoch++;
+		try {
+			return await request();
+		} finally {
+			this.pending--;
+			this.epoch++;
+		}
+	}
+
 	async load(graphId: string) {
+		this.epoch++; // a refresh still in flight must not land on top of this load
 		if (graphId !== this.graphId) {
 			this.graphId = graphId;
 			this.graph = null;
@@ -129,7 +191,7 @@ class GraphStore {
 
 	async addActor(name: string, kind: ActorKind): Promise<Actor | null> {
 		try {
-			const created = await api.addActor({ name, kind });
+			const created = await this.write(() => api.addActor({ name, kind }));
 			this.actors = [...this.actors, created].sort((a, b) => a.name.localeCompare(b.name));
 			this.error = '';
 			return created;
@@ -141,7 +203,7 @@ class GraphStore {
 
 	async addTask(task: NewTask): Promise<Task | null> {
 		try {
-			const created = await api.addTask(this.graphId, task);
+			const created = await this.write(() => api.addTask(this.graphId, task));
 			this.tasks = [...this.tasks, created];
 			this.error = '';
 			return created;
@@ -153,7 +215,7 @@ class GraphStore {
 
 	async updateTask(id: string, patch: TaskUpdate): Promise<Task | null> {
 		try {
-			const saved = await api.updateTask(this.graphId, id, patch);
+			const saved = await this.write(() => api.updateTask(this.graphId, id, patch));
 			this.replace(saved);
 			this.error = '';
 			return saved;
@@ -165,7 +227,7 @@ class GraphStore {
 
 	async deleteTask(id: string): Promise<boolean> {
 		try {
-			await api.deleteTask(this.graphId, id);
+			await this.write(() => api.deleteTask(this.graphId, id));
 			// the backend drops the edges of a deleted task; mirror that locally
 			this.tasks = this.tasks
 				.filter((t) => t.id !== id)
@@ -183,7 +245,7 @@ class GraphStore {
 	/** `dependency` blocks `dependee`. */
 	async connect(dependency: string, dependee: string): Promise<boolean> {
 		try {
-			await api.connectNodes(this.graphId, dependency, dependee);
+			await this.write(() => api.connectNodes(this.graphId, dependency, dependee));
 			const target = this.byId.get(dependee);
 			if (target && !target.depends_on.includes(dependency)) {
 				this.replace({ ...target, depends_on: [...target.depends_on, dependency] });
@@ -199,7 +261,7 @@ class GraphStore {
 
 	async disconnect(dependency: string, dependee: string): Promise<boolean> {
 		try {
-			await api.disconnectNodes(this.graphId, dependency, dependee);
+			await this.write(() => api.disconnectNodes(this.graphId, dependency, dependee));
 			const target = this.byId.get(dependee);
 			if (target) {
 				this.replace({ ...target, depends_on: target.depends_on.filter((d) => d !== dependency) });

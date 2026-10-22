@@ -2,7 +2,7 @@
 
 Task tracker where tasks are graph nodes and dependencies are visible by default.
 Product vision: [MISSION.md](MISSION.md); architecture (C4): [docs/architecture.md](docs/architecture.md);
-MVP plan and backlog: [TODO.md](TODO.md). Before changing the data model (node/edge types,
+MVP plan: [TODO.md](TODO.md) (frozen; the live backlog is the Meshwork graph, see Conventions). Before changing the data model (node/edge types,
 statuses) check MISSION.md § «Идея графа»: it fixes `BLOCKS` / `PART_OF` / `AFFECTS`,
 `CHORE` nodes and no OR-dependencies.
 
@@ -131,10 +131,12 @@ API (`/v0/...`):
 
 ## Conventions
 
-- Branches: `main` is stable, `dev` is the integration branch. Each TODO.md task gets a short
-  branch from `dev` (`feat/…`, `fix/…`, `ci/…`, `docs/…`), merged into `dev` by PR after green
-  CI. `dev` → `main` when a milestone (M0–M4 in TODO.md) is complete. Tick TODO.md items in
-  the same branch.
+- **Work is tracked in Meshwork itself**, graph "Finish the Meshwork MVP": find, take and hand
+  in tasks through the Meshwork MCP server following the
+  [meshwork-tasks skill](.claude/skills/meshwork-tasks/SKILL.md). TODO.md is frozen.
+- Branches: `main` is stable, `dev` is the integration branch. Each task gets a short branch
+  from `dev` (`feat/…`, `fix/…`, `ci/…`, `docs/…`), merged into `dev` by PR after green CI.
+  `dev` → `main` when a milestone (tags `m0`–`m4` in the graph) is complete.
 - Commit messages: short, English, imperative (`Add …`, `Fix …`).
 - CLAUDE.md files are in English; product docs (MISSION, architecture, TODO, operations) are in Russian.
 - Update docs/architecture.md on significant architecture changes.

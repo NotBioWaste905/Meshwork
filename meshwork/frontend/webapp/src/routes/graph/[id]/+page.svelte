@@ -46,6 +46,7 @@
 	let selectedId = $state<string | null>(null);
 	let showCritical = $state(false);
 	let menu = $state<MenuTarget | null>(null);
+	let dragging = $state(false);
 	/** Graph whose layout `nodes` holds. */
 	let layoutFor = '';
 	/** Where tasks created from the context menu go, until they get a node. */
@@ -142,6 +143,11 @@
 			}
 			rebuild(tasks, selectedId, critical);
 		});
+	});
+
+	// No background refresh under an open context menu (rename/add forms) or a node drag.
+	$effect(() => {
+		if (menu || dragging) return graphStore.hold();
 	});
 
 	// Remember positions so switching to Board/Table and back keeps the layout.
@@ -249,6 +255,8 @@
 					menu = { kind: 'node', x: event.clientX, y: event.clientY, id: node.id };
 				}}
 				onmovestart={() => (menu = null)}
+				onnodedragstart={() => (dragging = true)}
+				onnodedragstop={() => (dragging = false)}
 				proOptions={{ hideAttribution: true }}
 			>
 				<Background
