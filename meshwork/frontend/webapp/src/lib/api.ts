@@ -29,6 +29,12 @@ export type Task = {
 	priority: Priority;
 	/** Link to the task's pull request, an http(s) URL; empty when there is none. */
 	pr_url: string;
+	/** Milliseconds since the epoch; null for tasks older than this field. */
+	created_at: number | null;
+	/** Last change to the task's fields, status, edges or assignees; null like created_at. */
+	updated_at: number | null;
+	/** Actor ID of whoever created the task, if known. */
+	created_by: string | null;
 	graph_id: string;
 };
 
@@ -49,7 +55,9 @@ export type NewTask = Pick<Task, 'name'> &
 	>;
 
 /** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
-export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id' | 'reporter'>> & {
+export type TaskUpdate = Partial<
+	Omit<Task, 'id' | 'graph_id' | 'reporter' | 'created_at' | 'updated_at' | 'created_by'>
+> & {
 	/** Actor ID or name; '' removes the reporter. */
 	reporter?: string;
 };
@@ -61,6 +69,12 @@ export type Graph = {
 	task_count: number;
 	done_count: number;
 	blocked_count: number;
+	/** Milliseconds since the epoch; null for the oldest graphs. */
+	created_at: number | null;
+	/** Latest change to the graph or any of its tasks. */
+	updated_at: number | null;
+	/** Actor ID of whoever created the graph, if known. */
+	created_by: string | null;
 };
 
 export type ActorKind = 'human' | 'agent';

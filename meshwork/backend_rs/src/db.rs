@@ -32,7 +32,10 @@ fn first_count(rows: &[Row]) -> Result<i64> {
 
 pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
     graph
-        .query("CREATE (:Graph {id: $id, name: $name, created_at: timestamp()})")
+        .query(
+            "CREATE (:Graph {id: $id, name: $name, created_at: timestamp(), \
+                             updated_at: timestamp()})",
+        )
         .with_param("id", graph_id)
         .with_param("name", name)
         .execute()
@@ -41,14 +44,32 @@ pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) ->
     Ok(())
 }
 
-const GRAPH_RETURN: &str = "OPTIONAL MATCH (t:Task)-[:PART_OF]->(g) \
+const GRAPH_RETURN: &str = "OPTIONAL MATCH (g)-[:CREATED_BY]->(creator:Actor) \
+     OPTIONAL MATCH (t:Task)-[:PART_OF]->(g) \
      RETURN g.id AS id, g.name AS name, g.created_at AS created_at, \
+            g.updated_at AS own_updated_at, creator.id AS created_by, \
+            max(t.updated_at) AS tasks_updated_at, \
             count(t) AS task_count, \
             count(CASE WHEN t.status = 'DONE' THEN 1 END) AS done_count, \
             count(CASE WHEN t.status = 'BLOCKED' THEN 1 END) AS blocked_count";
 
 fn row_to_graph(row: &Row) -> Result<GraphInfo> {
+    let created_at: Option<i64> = row.try_get("created_at").map_err(db_err)?;
+    // The graph changes when it is renamed or any of its tasks does.
+    let updated_at = [
+        created_at,
+        row.try_get::<Option<i64>>("own_updated_at")
+            .map_err(db_err)?,
+        row.try_get::<Option<i64>>("tasks_updated_at")
+            .map_err(db_err)?,
+    ]
+    .into_iter()
+    .flatten()
+    .max();
     Ok(GraphInfo {
+        created_at,
+        updated_at,
+        created_by: row.try_get("created_by").map_err(db_err)?,
         id: row.try_get("id").map_err(db_err)?,
         name: row
             .try_get::<Option<String>>("name")
@@ -90,7 +111,7 @@ pub async fn get_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<GraphIn
 
 pub async fn rename_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
     graph
-        .query("MATCH (g:Graph {id: $graph_id}) SET g.name = $name")
+        .query("MATCH (g:Graph {id: $graph_id}) SET g.name = $name, g.updated_at = timestamp()")
         .with_param("graph_id", graph_id)
         .with_param("name", name)
         .execute()
@@ -179,6 +200,13 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
             .try_get::<Option<String>>("pr_url")
             .map_err(db_err)?
             .unwrap_or_default(),
+        created_at: row.try_get("created_at").map_err(db_err)?,
+        updated_at: row.try_get("updated_at").map_err(db_err)?,
+        created_by: row
+            .try_get::<Vec<String>>("creators")
+            .map_err(db_err)?
+            .into_iter()
+            .next(),
         graph_id: graph_id.to_string(),
     })
 }
@@ -186,9 +214,12 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
 const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
      OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:Actor) \
      OPTIONAL MATCH (t)-[:REPORTED_BY]->(r:Actor) \
+     OPTIONAL MATCH (t)-[:CREATED_BY]->(cb:Actor) \
      RETURN t.id AS id, t.name AS name, t.description AS description, \
             t.status AS status, t.tags AS tags, \
             t.priority AS priority, t.pr_url AS pr_url, \
+            t.created_at AS created_at, t.updated_at AS updated_at, \
+            collect(DISTINCT cb.id) AS creators, \
             collect(DISTINCT dep.id) AS dependencies, \
             collect(DISTINCT u.id) AS users, \
             collect(DISTINCT r.id) AS reporters \
@@ -244,7 +275,8 @@ pub async fn create_task(
             "MATCH (g:Graph {id: $graph_id}) \
              CREATE (:Task {id: $id, name: $name, description: $description, \
                             status: $status, tags: $tags, \
-                            priority: $priority, pr_url: $pr_url})-[:PART_OF]->(g)",
+                            priority: $priority, pr_url: $pr_url, \
+                            created_at: timestamp(), updated_at: timestamp()})-[:PART_OF]->(g)",
         )
         .with_param("graph_id", graph_id)
         .with_param("id", task_id)
@@ -418,7 +450,7 @@ pub async fn claim_task(
              WITH t, open_blockers, count(other) AS others \
              WHERE open_blockers = 0 AND others = 0 \
              MATCH (a:Actor {id: $actor}) \
-             SET t.status = $in_progress \
+             SET t.status = $in_progress, t.updated_at = timestamp() \
              MERGE (t)-[:ASSIGNED_TO]->(a) \
              RETURN count(t) AS n",
         )
@@ -432,6 +464,66 @@ pub async fn claim_task(
         .await
         .map_err(db_err)?;
     Ok(first_count(&collect_rows(result).await?)? > 0)
+}
+
+/// Records who created a task or graph: `(x)-[:CREATED_BY]->(:Actor)`.
+pub async fn set_created_by(
+    graph: &mut AsyncGraph,
+    label: Created,
+    id: &str,
+    actor_id: &str,
+) -> Result<()> {
+    // Only the fixed label goes into the query string.
+    let q = format!(
+        "MATCH (x:{} {{id: $id}}), (a:Actor {{id: $actor}}) CREATE (x)-[:CREATED_BY]->(a)",
+        label.as_str()
+    );
+    graph
+        .query(q)
+        .with_param("id", id)
+        .with_param("actor", actor_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// What `set_created_by` records the creator of.
+#[derive(Clone, Copy)]
+pub enum Created {
+    Graph,
+    Task,
+}
+
+impl Created {
+    fn as_str(self) -> &'static str {
+        match self {
+            Created::Graph => "Graph",
+            Created::Task => "Task",
+        }
+    }
+}
+
+/// Marks the task as changed now.
+pub async fn touch_task(graph: &mut AsyncGraph, task_id: &str) -> Result<()> {
+    graph
+        .query("MATCH (t:Task {id: $id}) SET t.updated_at = timestamp()")
+        .with_param("id", task_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Marks the graph as changed now, for changes no remaining task shows (a deleted task).
+pub async fn touch_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<()> {
+    graph
+        .query("MATCH (g:Graph {id: $id}) SET g.updated_at = timestamp()")
+        .with_param("id", graph_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
 }
 
 /// Replaces the task's reporter; `None` removes it. The actor must exist (see
@@ -684,7 +776,8 @@ pub async fn update_actor(
 }
 
 /// Deletes the actor together with its `ASSIGNED_TO` and `REPORTED_BY` edges (the tasks it
-/// reported are left without a reporter) and its tokens. Its comments stay, without an author.
+/// reported are left without a reporter) and its tokens. Its comments stay, without an author,
+/// and what it created without a creator.
 pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> {
     graph
         .query(
@@ -699,8 +792,8 @@ pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Moves the tasks assigned to or reported by `from`, its comments and its tokens over to
-/// `into`, then deletes `from`. A task assigned to both keeps one edge; a token of the duplicate now acts as `into`.
+/// Moves the tasks assigned to or reported by `from`, what it created, its comments and its
+/// tokens over to `into`, then deletes `from`. A task assigned to both keeps one edge; a token of the duplicate now acts as `into`.
 /// If interrupted between the queries, `from` is still there and the merge can simply be
 /// repeated.
 pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Result<()> {
@@ -732,6 +825,18 @@ pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Resu
             "MATCH (c:Comment)-[r:BY]->(:Actor {id: $from}) \
              MATCH (d:Actor {id: $into}) \
              CREATE (c)-[:BY]->(d) \
+             DELETE r",
+        )
+        .with_param("from", from)
+        .with_param("into", into)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    graph
+        .query(
+            "MATCH (x)-[r:CREATED_BY]->(:Actor {id: $from}) \
+             MATCH (d:Actor {id: $into}) \
+             CREATE (x)-[:CREATED_BY]->(d) \
              DELETE r",
         )
         .with_param("from", from)
