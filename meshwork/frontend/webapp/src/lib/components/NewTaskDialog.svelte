@@ -137,7 +137,9 @@
 					/>
 				</div>
 				<div class="flex flex-col gap-1.5">
-					<label for="nt-desc" class="text-sm font-medium">Description</label>
+					<label for="nt-desc" class="text-sm font-medium"
+						>Description <span class="text-muted font-normal">(Markdown)</span></label
+					>
 					<textarea
 						id="nt-desc"
 						rows="3"

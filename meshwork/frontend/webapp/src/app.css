@@ -161,3 +161,29 @@
 		background-size: 22px 22px;
 	}
 }
+
+/* Rendered Markdown (task descriptions) in the app's palette */
+@utility prose-meshwork {
+	--tw-prose-body: var(--color-ink-2);
+	--tw-prose-headings: var(--color-ink);
+	--tw-prose-bold: var(--color-ink);
+	--tw-prose-links: var(--color-accent);
+	--tw-prose-code: var(--color-ink);
+	--tw-prose-quotes: var(--color-ink-3);
+	--tw-prose-quote-borders: var(--color-line-strong);
+	--tw-prose-bullets: var(--color-faint);
+	--tw-prose-counters: var(--color-muted);
+	--tw-prose-hr: var(--color-line);
+	--tw-prose-th-borders: var(--color-line-strong);
+	--tw-prose-td-borders: var(--color-line);
+	--tw-prose-pre-bg: var(--color-surface-2);
+	--tw-prose-pre-code: var(--color-ink);
+
+	/* the plugin wraps inline code in backticks and quotes in quote marks; plain text reads better */
+	& :where(code)::before,
+	& :where(code)::after,
+	& :where(blockquote p)::before,
+	& :where(blockquote p)::after {
+		content: none;
+	}
+}
