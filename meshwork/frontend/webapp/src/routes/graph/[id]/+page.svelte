@@ -81,17 +81,20 @@
 	}
 
 	function rebuild(tasks: Task[], selectedTaskId: string | null, critical: boolean) {
+		// Positions on screen win; on a fresh canvas, the ones this tab remembers, then saved ones.
 		const previous =
 			nodes.length > 0
 				? new Map(nodes.map((n) => [n.id, n.position]))
-				: (savedPositions.get(layoutFor) ?? new Map<string, XYPosition>());
+				: (savedPositions.get(layoutFor) ??
+					new Map(tasks.flatMap((t) => (t.position ? [[t.id, t.position] as const] : []))));
 		const fresh = previous.size === 0 ? computeLayout(tasks) : null;
 		const maxY = Math.max(0, ...[...previous.values()].map((p) => p.y));
 		let added = 0;
 		const dependents = graphStore.dependents;
 
 		nodes = tasks.map((task) => {
-			let position = previous.get(task.id) ?? placed.get(task.id) ?? fresh?.get(task.id);
+			let position =
+				previous.get(task.id) ?? task.position ?? placed.get(task.id) ?? fresh?.get(task.id);
 			if (!position) position = { x: 40 + 200 * added++, y: maxY + NODE_HEIGHT + 40 };
 			return {
 				id: task.id,
@@ -161,14 +164,22 @@
 		}
 	});
 
+	/** Saves every node's position, not just the moved ones: a layout saved in part would
+	 * leave the unsaved nodes to be placed anew on the next load. */
+	function saveLayout() {
+		graphStore.saveLayout(nodes.map((n) => [n.id, n.position]));
+	}
+
 	function placeNode(id: string, position: XYPosition) {
 		placed.set(id, position);
 		nodes = nodes.map((n) => (n.id === id ? { ...n, position } : n));
+		saveLayout();
 	}
 
 	function autoLayout() {
 		const positions = computeLayout(graphStore.tasks);
 		nodes = nodes.map((n) => ({ ...n, position: positions.get(n.id) ?? n.position }));
+		saveLayout();
 	}
 
 	function onConnect(params: Connection) {
@@ -264,7 +275,10 @@
 				}}
 				onmovestart={() => (menu = null)}
 				onnodedragstart={() => (dragging = true)}
-				onnodedragstop={() => (dragging = false)}
+				onnodedragstop={() => {
+					dragging = false;
+					saveLayout();
+				}}
 				proOptions={{ hideAttribution: true }}
 			>
 				<Background

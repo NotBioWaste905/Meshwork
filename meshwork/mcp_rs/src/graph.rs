@@ -48,6 +48,7 @@ mod tests {
             created_at: None,
             updated_at: None,
             created_by: None,
+            position: None,
             tags: vec![],
             status,
             priority: Priority::Normal,

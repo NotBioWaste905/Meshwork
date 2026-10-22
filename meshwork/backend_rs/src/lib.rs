@@ -26,8 +26,8 @@ pub mod schemas;
 use error::{AppError, Result};
 use schemas::{
     Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    IssuedToken, MergeActors, MessageResponse, NewActor, NewComment, NewGraph, NewTask, NewToken,
-    OwnToken, Status, Task, TaskUpdate,
+    IssuedToken, LayoutUpdate, MergeActors, MessageResponse, NewActor, NewComment, NewGraph,
+    NewTask, NewToken, OwnToken, Status, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -78,6 +78,7 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
             "/v0/:graph_id/task/:task_id/comments",
             get(list_comments).post(add_comment),
         )
+        .route("/v0/:graph_id/layout", axum::routing::put(save_layout))
         .route("/v0/:graph_id/connect_nodes/", post(connect_nodes))
         .route("/v0/:graph_id/disconnect_nodes/", post(disconnect_nodes))
         // The last layer added runs first: the connection check, then the token lookup.
@@ -556,6 +557,33 @@ async fn ensure_no_cycle(
         )));
     }
     Ok(())
+}
+
+/// Saves where task nodes sit on the canvas. Every task must be in the graph (else 404, nothing
+/// saved) and every coordinate finite (else 400).
+async fn save_layout(
+    State(state): State<AppState>,
+    Path(graph_id): Path<String>,
+    Json(update): Json<LayoutUpdate>,
+) -> Result<Json<MessageResponse>> {
+    if update
+        .positions
+        .values()
+        .any(|p| !p.x.is_finite() || !p.y.is_finite())
+    {
+        return Err(AppError::BadRequest(
+            "Positions must be finite numbers".to_string(),
+        ));
+    }
+    let mut graph = state.graph.clone();
+    db::ensure_graph(&mut graph, &graph_id).await?;
+    let ids: Vec<String> = update.positions.keys().cloned().collect();
+    db::ensure_tasks_in_graph(&mut graph, &graph_id, &ids).await?;
+    let positions: Vec<(String, schemas::Position)> = update.positions.into_iter().collect();
+    db::save_positions(&mut graph, &graph_id, &positions).await?;
+    Ok(Json(MessageResponse {
+        message: format!("Saved {} position(s)", positions.len()),
+    }))
 }
 
 /// Longest comment accepted, in characters.

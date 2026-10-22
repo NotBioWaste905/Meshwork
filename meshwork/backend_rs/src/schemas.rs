@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -55,6 +57,19 @@ impl Priority {
     }
 }
 
+/// Where a task's node sits on the graph canvas, in canvas units (its top-left corner).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Request body for saving node positions: task ID -> position. Tasks left out keep theirs.
+#[derive(Deserialize, Debug)]
+pub struct LayoutUpdate {
+    pub positions: BTreeMap<String, Position>,
+}
+
 /// A task as returned by the API.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Task {
@@ -84,6 +99,9 @@ pub struct Task {
     /// and once that actor was deleted.
     #[serde(default)]
     pub created_by: Option<String>,
+    /// Saved canvas position; `None` until the node was placed, then the canvas lays it out.
+    #[serde(default)]
+    pub position: Option<Position>,
     pub graph_id: String,
 }
 

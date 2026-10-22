@@ -35,6 +35,8 @@ export type Task = {
 	updated_at: number | null;
 	/** Actor ID of whoever created the task, if known. */
 	created_by: string | null;
+	/** Saved canvas position (top-left corner); null until the node was placed. */
+	position: { x: number; y: number } | null;
 	graph_id: string;
 };
 
@@ -56,7 +58,10 @@ export type NewTask = Pick<Task, 'name'> &
 
 /** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
 export type TaskUpdate = Partial<
-	Omit<Task, 'id' | 'graph_id' | 'reporter' | 'created_at' | 'updated_at' | 'created_by'>
+	Omit<
+		Task,
+		'id' | 'graph_id' | 'reporter' | 'created_at' | 'updated_at' | 'created_by' | 'position'
+	>
 > & {
 	/** Actor ID or name; '' removes the reporter. */
 	reporter?: string;
@@ -274,6 +279,14 @@ export class MeshworkAPI {
 	}
 
 	/** `dependency` blocks `dependee`; on the canvas the edge goes dependency → dependee. */
+	/** Saves canvas positions, task ID -> top-left corner; tasks left out keep theirs. */
+	saveLayout(
+		graphId: string,
+		positions: Record<string, { x: number; y: number }>
+	): Promise<{ message: string }> {
+		return this.request('PUT', `/v0/${graphId}/layout`, { positions });
+	}
+
 	connectNodes(
 		graphId: string,
 		dependency: string,
