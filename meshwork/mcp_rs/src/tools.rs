@@ -37,6 +37,12 @@ fn respond<T: Serialize>(res: Result<T, String>) -> Result<CallToolResult, Error
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct CreateGraphArgs {
+    /// The graph's goal, shown as its name in the UI, e.g. "Ship the billing v2 release".
+    pub name: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct GraphArgs {
     /// Graph ID (UUID).
     pub graph_id: String,
@@ -101,13 +107,25 @@ pub struct LinkArgs {
 #[tool_router]
 impl Meshwork {
     #[tool(
-        description = "Create a new empty task graph and return its ID.",
+        description = "List all graphs (projects) with their names and task counts, newest first. \
+                       Call this first to find the graph_id of the project you work on.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_graphs(&self) -> Result<CallToolResult, ErrorData> {
+        respond(self.backend.list_graphs().await)
+    }
+
+    #[tool(
+        description = "Create a new empty task graph named after its goal and return its ID.",
         annotations(read_only_hint = false)
     )]
-    async fn create_graph(&self) -> Result<CallToolResult, ErrorData> {
+    async fn create_graph(
+        &self,
+        Parameters(a): Parameters<CreateGraphArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
         respond(
             self.backend
-                .create_graph()
+                .create_graph(a.name.as_deref().unwrap_or_default())
                 .await
                 .map(|id| json!({ "graph_id": id })),
         )
@@ -247,7 +265,7 @@ impl Meshwork {
 #[tool_handler(
     name = "meshwork",
     instructions = "Meshwork is a task tracker where tasks are graph nodes and dependencies are explicit. \
-                    Call list_ready_tasks to find unblocked work, get_task_context before starting, \
+                    Call list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
                     update_task to move status, and link_tasks to record new dependencies."
 )]
 impl ServerHandler for Meshwork {}

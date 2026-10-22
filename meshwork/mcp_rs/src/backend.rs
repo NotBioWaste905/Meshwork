@@ -4,7 +4,7 @@ use reqwest::{Client, Method, RequestBuilder};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 
-use crate::model::{NewTask, Task, TaskUpdate};
+use crate::model::{GraphInfo, NewTask, Task, TaskUpdate};
 
 #[derive(Clone)]
 pub struct Backend {
@@ -56,9 +56,16 @@ impl Backend {
         Err(format!("{status}: {message}"))
     }
 
-    pub async fn create_graph(&self) -> Result<String, String> {
-        let g: CreatedGraph = self.send(self.req(Method::POST, "create_graph")).await?;
+    pub async fn create_graph(&self, name: &str) -> Result<String, String> {
+        let req = self
+            .req(Method::POST, "create_graph")
+            .json(&json!({ "name": name }));
+        let g: CreatedGraph = self.send(req).await?;
         Ok(g.id)
+    }
+
+    pub async fn list_graphs(&self) -> Result<Vec<GraphInfo>, String> {
+        self.send(self.req(Method::GET, "graphs")).await
     }
 
     pub async fn all_tasks(&self, graph: &str) -> Result<Vec<Task>, String> {
