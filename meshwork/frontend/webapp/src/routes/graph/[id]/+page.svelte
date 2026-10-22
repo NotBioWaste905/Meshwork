@@ -27,6 +27,7 @@
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { Status, type Task } from '$lib/api';
 	import { criticalPath, graphStore, type TaskFilter } from '$lib/graphStore.svelte';
+	import { session } from '$lib/session.svelte';
 	import { shortId, STATUS_META } from '$lib/status';
 	import {
 		NODE_HEIGHT,
@@ -56,6 +57,7 @@
 	let terminal = $derived(graphStore.terminals.length === 1 ? graphStore.terminals[0] : undefined);
 	let chips = $derived<{ id: TaskFilter; label: string; count: number }[]>([
 		{ id: 'all', label: 'All tasks', count: graphStore.tasks.length },
+		...(session.me ? [{ id: 'mine' as const, label: 'Mine', count: graphStore.mineCount }] : []),
 		{ id: 'blocked', label: 'Blocked', count: graphStore.blockedCount }
 	]);
 

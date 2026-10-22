@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { Priority, Status } from '$lib/api';
 	import { graphStore } from '$lib/graphStore.svelte';
+	import { session } from '$lib/session.svelte';
 	import { PRIORITY_LABEL, PRIORITY_ORDER } from '$lib/priority';
 	import { shortId, STATUS_META } from '$lib/status';
 	import AssigneePicker from './AssigneePicker.svelte';
@@ -15,7 +16,7 @@
 	let priority = $state<Priority>(Priority.NORMAL);
 	/** Actor ID, '' for unassigned. */
 	let assignee = $state('');
-	/** Actor ID, '' for nobody. (The API would default to the token's actor; the UI sends none yet.) */
+	/** Actor ID; '' leaves it to the API: the signed-in actor, or nobody when signed out. */
 	let reporter = $state('');
 	let blockers = $state<string[]>([]);
 	let tags = $state<string[]>([]);
@@ -196,7 +197,7 @@
 						<div class="flex">
 							<AssigneePicker
 								id="nt-reporter"
-								emptyLabel="Nobody"
+								emptyLabel={session.me ? `You (${session.me.name})` : 'Nobody'}
 								value={reporter}
 								onchange={(actorId) => (reporter = actorId)}
 							/>

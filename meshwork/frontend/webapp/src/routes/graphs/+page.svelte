@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api, type Graph } from '$lib/api';
+	import { api, type Graph, type Task } from '$lib/api';
+	import StatusPill from '$lib/components/StatusPill.svelte';
+	import { waitingReason } from '$lib/graphStore.svelte';
 	import { liveRefresh, mergeById } from '$lib/liveRefresh';
+	import { session } from '$lib/session.svelte';
+	import { shortId } from '$lib/status';
 
 	const COLORS = ['#2349C7', '#0F766E', '#7A3FC4', '#B4530A'];
 
@@ -37,6 +41,34 @@
 	onMount(() => {
 		load();
 		return liveRefresh(load);
+	});
+
+	/** Open work others wait for from the signed-in actor, across all graphs. */
+	let waiting = $state<{ task: Task; reason: string; graph: Graph }[]>([]);
+
+	// Follows the graph list (polled) and the signed-in actor; empty when signed out.
+	$effect(() => {
+		const me = session.me;
+		const list = graphs;
+		if (!me) {
+			waiting = [];
+			return;
+		}
+		let stale = false;
+		Promise.all(list.map(async (graph) => ({ graph, tasks: await api.getAllTasks(graph.id) })))
+			.then((loaded) => {
+				if (stale) return;
+				waiting = loaded.flatMap(({ graph, tasks }) =>
+					tasks.flatMap((task) => {
+						const reason = waitingReason(task, tasks);
+						return reason ? [{ task, reason, graph }] : [];
+					})
+				);
+			})
+			.catch((e) => console.warn('Cannot load tasks for Waiting on you:', e));
+		return () => {
+			stale = true;
+		};
 	});
 
 	const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
@@ -137,6 +169,36 @@
 			</a>
 		</div>
 	</header>
+
+	{#if session.me}
+		<section aria-labelledby="attn" class="card flex flex-col gap-3 px-6 py-5">
+			<div class="flex flex-wrap items-baseline gap-3">
+				<h2 id="attn" class="m-0 text-[17px] font-semibold">Waiting on you</h2>
+				<span class="text-muted text-sm">
+					{waiting.length === 0
+						? 'Nothing of yours is holding anyone up'
+						: `${waiting.length} ${waiting.length === 1 ? 'task' : 'tasks'}`}
+				</span>
+			</div>
+			{#if waiting.length > 0}
+				<ul class="m-0 flex list-none flex-col p-0">
+					{#each waiting as w (w.task.id)}
+						<li class="border-line-soft flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-3">
+							<span class="text-muted w-14 font-mono text-[13px]">{shortId(w.task)}</span>
+							<a
+								href="/graph/{w.graph.id}/task/{w.task.id}"
+								class="text-ink min-w-0 flex-[1_1_260px] text-[15px] font-medium no-underline"
+								>{w.task.name}</a
+							>
+							<span class="text-muted text-sm">{title(w.graph)}</span>
+							<StatusPill status={w.task.status} />
+							<span class="text-danger min-w-36 text-right text-sm font-medium">{w.reason}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
 
 	<section
 		aria-label="All graphs"

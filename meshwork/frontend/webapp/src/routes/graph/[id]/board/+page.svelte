@@ -3,6 +3,7 @@
 	import GraphHeader from '$lib/components/GraphHeader.svelte';
 	import PriorityMark from '$lib/components/PriorityMark.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
+	import { session } from '$lib/session.svelte';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
 	let columns = $derived(
@@ -30,6 +31,14 @@
 			aria-pressed={graphStore.filter === 'all'}
 			onclick={() => (graphStore.filter = 'all')}>All tasks · {graphStore.tasks.length}</button
 		>
+		{#if session.me}
+			<button
+				type="button"
+				class="chip"
+				aria-pressed={graphStore.filter === 'mine'}
+				onclick={() => (graphStore.filter = 'mine')}>Mine · {graphStore.mineCount}</button
+			>
+		{/if}
 		<button
 			type="button"
 			class="chip"

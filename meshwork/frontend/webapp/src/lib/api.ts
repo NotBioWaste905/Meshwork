@@ -89,15 +89,41 @@ export class ApiError extends Error {
 
 export class MeshworkAPI {
 	private baseUrl: string;
+	/** Actor token sent with every request (see session.svelte.ts); '' sends none. */
+	private token = '';
+	/** Requests wait for this: the check of a stored token, which may drop a revoked one. */
+	private ready: Promise<unknown> = Promise.resolve();
 
 	constructor(baseUrl: string = API_BASE_URL) {
 		this.baseUrl = baseUrl;
 	}
 
-	private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+	setToken(token: string) {
+		this.token = token;
+	}
+
+	/** Holds requests until `check` settles. */
+	waitFor(check: Promise<unknown>) {
+		this.ready = check.catch(() => {});
+	}
+
+	/** `token` given: sent as is, without waiting (used to check tokens). */
+	private async request<T>(
+		method: string,
+		path: string,
+		body?: unknown,
+		token?: string
+	): Promise<T> {
+		if (token === undefined) {
+			await this.ready;
+			token = this.token;
+		}
+		const headers: Record<string, string> = {};
+		if (body !== undefined) headers['Content-Type'] = 'application/json';
+		if (token) headers['Authorization'] = `Bearer ${token}`;
 		const response = await fetch(`${this.baseUrl}${path}`, {
 			method,
-			headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+			headers,
 			body: body === undefined ? undefined : JSON.stringify(body)
 		});
 		const text = await response.text();
@@ -124,6 +150,11 @@ export class MeshworkAPI {
 
 	renameGraph(graphId: string, name: string): Promise<Graph> {
 		return this.request('PUT', `/v0/${graphId}`, { name });
+	}
+
+	/** The actor of a token: the given one, or the one in use. 401 without a valid token. */
+	me(token?: string): Promise<Actor> {
+		return this.request('GET', '/v0/me', undefined, token ?? this.token);
 	}
 
 	// Actor operations
