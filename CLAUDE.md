@@ -25,8 +25,10 @@ meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
 meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre, marked + DOMPurify
   src/lib/api.ts             #   the only HTTP client, mirrors schemas.rs
   src/lib/graphStore.svelte.ts #  tasks of the open graph, shared by all graph screens
+  src/lib/session.svelte.ts  #   the UI's actor token (pasted on /me, kept in localStorage) and current actor
   src/routes/graphs/         #   graph list (GET /v0/graphs); new/: create a named graph
   src/routes/actors/         #   actor list: add, rename, kind, merge duplicates, delete
+  src/routes/me/             #   "You": sign in with an actor token, sign out
   src/routes/graph/          #   +page.svelte: redirect to last/new graph
                              #   [id]/: graph view, board/, table/, task/[taskId]/
 meshwork/mcp_rs/             # MCP server for AI agents (rmcp, axum 0.8), thin REST client of the backend

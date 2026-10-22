@@ -10,9 +10,10 @@ import {
 	type TaskUpdate
 } from './api';
 import { mergeById } from './liveRefresh';
+import { session } from './session.svelte';
 import { shortId } from './status';
 
-export type TaskFilter = 'all' | 'blocked';
+export type TaskFilter = 'all' | 'mine' | 'blocked';
 
 /** The tasks of the open graph, shared by the Graph, Board, Table and Task screens. */
 class GraphStore {
@@ -78,11 +79,15 @@ class GraphStore {
 
 	doneCount = $derived(this.tasks.filter((t) => t.status === Status.DONE).length);
 	blockedCount = $derived(this.tasks.filter((t) => t.status === Status.BLOCKED).length);
+	/** Tasks assigned to the signed-in actor; 0 when signed out. */
+	mineCount = $derived(this.tasks.filter((t) => isMine(t)).length);
 
 	visible = $derived(this.tasks.filter((t) => this.matches(t)));
 
 	matches(task: Task): boolean {
 		if (this.filter === 'blocked') return task.status === Status.BLOCKED;
+		// signed out meanwhile: show everything rather than nothing
+		if (this.filter === 'mine' && session.me) return isMine(task);
 		return true;
 	}
 
@@ -329,4 +334,22 @@ export function describeRelations(task: Task, tasks: Task[]): { text: string; wa
 		return { text: 'Terminal node', warn: false };
 	}
 	return { text: task.depends_on.length === 0 ? 'No dependencies' : '', warn: false };
+}
+
+/** Assigned to the signed-in actor. */
+export function isMine(task: Task): boolean {
+	return !!session.me && task.users.includes(session.me.id);
+}
+
+/** Why a task is waiting on the signed-in actor, or null: an open task of theirs that blocks
+ * other open tasks, or a task in review they reported. */
+export function waitingReason(task: Task, tasks: Task[]): string | null {
+	const me = session.me;
+	if (!me || task.status === Status.DONE) return null;
+	if (task.status === Status.REVIEW && task.reporter === me.id) return 'Waiting for your review';
+	if (!task.users.includes(me.id)) return null;
+	const blocks = tasks.filter(
+		(t) => t.status !== Status.DONE && t.depends_on.includes(task.id)
+	).length;
+	return blocks > 0 ? `Blocks ${blocks} ${blocks === 1 ? 'task' : 'tasks'}` : null;
 }
