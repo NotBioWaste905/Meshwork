@@ -76,6 +76,18 @@ export type Actor = {
 	task_count: number;
 };
 
+/** One of the signed-in actor's tokens; the token itself is never shown again. */
+export type OwnToken = {
+	id: string;
+	label: string;
+	/** Milliseconds since the epoch. */
+	created_at: number;
+	actor_id: string;
+	actor_name: string;
+	/** The token this browser uses. */
+	current: boolean;
+};
+
 /** A note an actor left on a task. */
 export type Comment = {
 	id: string;
@@ -166,6 +178,20 @@ export class MeshworkAPI {
 	/** The actor of a token: the given one, or the one in use. 401 without a valid token. */
 	me(token?: string): Promise<Actor> {
 		return this.request('GET', '/v0/me', undefined, token ?? this.token);
+	}
+
+	/** The signed-in actor's tokens. */
+	listOwnTokens(): Promise<OwnToken[]> {
+		return this.request('GET', '/v0/me/tokens');
+	}
+
+	/** Another token for the signed-in actor; `token` is shown only in this response. */
+	issueOwnToken(label: string): Promise<{ token: string; info: Omit<OwnToken, 'current'> }> {
+		return this.request('POST', '/v0/me/tokens', { label });
+	}
+
+	revokeOwnToken(tokenId: string): Promise<{ message: string }> {
+		return this.request('DELETE', `/v0/me/tokens/${tokenId}`);
 	}
 
 	// Actor operations

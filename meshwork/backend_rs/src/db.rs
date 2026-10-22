@@ -797,6 +797,21 @@ pub async fn actor_by_token_hash(graph: &mut AsyncGraph, hash: &str) -> Result<O
         .transpose()
 }
 
+/// ID of the token with this hash, if any.
+pub async fn token_id_by_hash(graph: &mut AsyncGraph, hash: &str) -> Result<Option<String>> {
+    let result = graph
+        .query("MATCH (k:Token {hash: $hash}) RETURN k.id AS id")
+        .with_param("hash", hash)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .first()
+        .map(|row| row.try_get("id").map_err(db_err))
+        .transpose()
+}
+
 /// Tokens of one actor, or of everyone; never the hashes.
 pub async fn list_tokens(graph: &mut AsyncGraph, actor_id: Option<&str>) -> Result<Vec<TokenInfo>> {
     let q = format!(

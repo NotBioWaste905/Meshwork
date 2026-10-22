@@ -258,3 +258,27 @@ pub struct TokenInfo {
     pub actor_id: String,
     pub actor_name: String,
 }
+
+/// One of the caller's own tokens, as `GET /v0/me/tokens` lists it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct OwnToken {
+    #[serde(flatten)]
+    pub info: TokenInfo,
+    /// The token this request was made with.
+    pub current: bool,
+}
+
+/// Request body for issuing the caller another token.
+#[derive(Deserialize, Debug, Default)]
+pub struct NewToken {
+    /// What the token is for, e.g. "laptop browser"; may be empty.
+    #[serde(default)]
+    pub label: String,
+}
+
+/// A newly issued token: the only time the token itself is shown.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct IssuedToken {
+    pub token: String,
+    pub info: TokenInfo,
+}

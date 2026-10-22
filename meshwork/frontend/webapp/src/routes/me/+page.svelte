@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Avatar from '$lib/components/Avatar.svelte';
+	import OwnTokens from '$lib/components/OwnTokens.svelte';
 	import { session } from '$lib/session.svelte';
 
 	let token = $state('');
@@ -43,6 +44,11 @@
 				>Sign out</button
 			>
 		</section>
+		<OwnTokens />
+		<p class="text-muted m-0 text-sm">
+			People and agents are managed on the <a href="/actors">Actors</a> screen: add, rename, merge duplicates,
+			delete.
+		</p>
 	{:else}
 		{#if session.expired}
 			<div class="bg-st-blocked-bg text-danger rounded-lg p-3 text-sm" role="alert">

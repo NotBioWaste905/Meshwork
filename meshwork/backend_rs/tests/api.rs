@@ -1471,3 +1471,97 @@ async fn task_comments() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn own_tokens_self_service() {
+    let mut app = TestApp::new().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, ann_token_id, _) = auth::issue_token(&mut app.graph, "ann", "cli")
+        .await
+        .unwrap();
+    let (_, bob_token_id, _) = auth::issue_token(&mut app.graph, "bob", "").await.unwrap();
+
+    // Nobody without a token: there is no way to get a first token over HTTP.
+    for (method, uri) in [
+        (Method::GET, "/v0/me/tokens".to_string()),
+        (Method::POST, "/v0/me/tokens".to_string()),
+        (Method::DELETE, format!("/v0/me/tokens/{ann_token_id}")),
+    ] {
+        let body = (method == Method::POST).then(|| json!({}));
+        let (status, _) = app.call(method, &uri, body).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    // Only the caller's tokens, the one in use marked.
+    let (status, body) = app
+        .call_as(Some(&ann_token), Method::GET, "/v0/me/tokens", None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 1);
+    assert_eq!(body[0]["id"], json!(ann_token_id));
+    assert_eq!(body[0]["label"], "cli");
+    assert_eq!(body[0]["current"], true);
+
+    // Another token for oneself, shown once, and it works.
+    let (status, issued) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            "/v0/me/tokens",
+            Some(json!({ "label": " phone " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{issued}");
+    let new_token = issued["token"].as_str().unwrap().to_string();
+    assert!(new_token.starts_with("mw_"));
+    assert_eq!(issued["info"]["label"], "phone");
+    assert_eq!(issued["info"]["actor_id"], json!(ann.id));
+    let (status, body) = app
+        .call_as(Some(&new_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!((status, &body["id"]), (StatusCode::OK, &json!(ann.id)));
+    let (status, _) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            "/v0/me/tokens",
+            Some(json!({ "label": "x".repeat(101) })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Someone else's token cannot be revoked, or even seen to exist.
+    let (status, _) = app
+        .call_as(
+            Some(&ann_token),
+            Method::DELETE,
+            &format!("/v0/me/tokens/{bob_token_id}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Revoking one's own: the old token stops working, the new one keeps going.
+    let (status, _) = app
+        .call_as(
+            Some(&new_token),
+            Method::DELETE,
+            &format!("/v0/me/tokens/{ann_token_id}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .call_as(Some(&ann_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (_, body) = app
+        .call_as(Some(&new_token), Method::GET, "/v0/me/tokens", None)
+        .await;
+    assert_eq!(body.as_array().unwrap().len(), 1);
+    assert_eq!(body[0]["current"], true);
+
+    app.cleanup().await;
+}
