@@ -4,7 +4,7 @@ use reqwest::{Client, Method, RequestBuilder, StatusCode};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 
-use crate::model::{Actor, GraphInfo, NewTask, Task, TaskUpdate};
+use crate::model::{Actor, GraphInfo, NewActor, NewTask, Task, TaskUpdate};
 
 /// A backend client. [`Backend::new`] makes anonymous requests; [`Backend::with_token`] gives a
 /// client that acts as the token's actor.
@@ -102,6 +102,15 @@ impl Backend {
 
     pub async fn list_graphs(&self) -> Result<Vec<GraphInfo>, String> {
         self.send(self.req(Method::GET, "graphs")).await
+    }
+
+    pub async fn list_actors(&self) -> Result<Vec<Actor>, String> {
+        self.send(self.req(Method::GET, "actors")).await
+    }
+
+    pub async fn create_actor(&self, actor: &NewActor) -> Result<Actor, String> {
+        self.send(self.req(Method::POST, "actors").json(actor))
+            .await
     }
 
     pub async fn all_tasks(&self, graph: &str) -> Result<Vec<Task>, String> {

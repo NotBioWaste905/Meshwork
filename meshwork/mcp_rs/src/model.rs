@@ -97,6 +97,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn actors_match_the_backend_contract() {
+        let body = serde_json::to_value(NewActor {
+            name: "Ann".into(),
+            kind: ActorKind::Agent,
+        })
+        .unwrap();
+        assert_eq!(body, serde_json::json!({ "name": "Ann", "kind": "agent" }));
+        let actors: Vec<Actor> =
+            serde_json::from_str(r#"[{"id":"a1","name":"Ann","kind":"human","task_count":2}]"#)
+                .unwrap();
+        assert_eq!(actors[0].task_count, 2);
+    }
+
+    #[test]
     fn decodes_graph_list_from_backend() {
         let body =
             r#"[{"id":"g1","name":"Ship it","task_count":3,"done_count":1,"blocked_count":0}]"#;
@@ -104,6 +118,21 @@ mod tests {
         assert_eq!(graphs[0].name, "Ship it");
         assert_eq!(graphs[0].task_count, 3);
     }
+}
+
+/// What an actor is: a person or an AI agent.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ActorKind {
+    Human,
+    Agent,
+}
+
+/// Body of `POST /v0/actors`.
+#[derive(Serialize, Debug)]
+pub struct NewActor {
+    pub name: String,
+    pub kind: ActorKind,
 }
 
 /// An actor as the backend returns it (`GET /v0/me`, `/v0/actors`).

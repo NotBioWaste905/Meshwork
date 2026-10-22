@@ -14,7 +14,7 @@ use serde_json::json;
 use crate::{
     auth::Caller,
     graph,
-    model::{NewTask, Priority, Status, Task, TaskUpdate},
+    model::{ActorKind, NewActor, NewTask, Priority, Status, Task, TaskUpdate},
 };
 
 /// The tools. Stateless: every call acts through its [`Caller`], the backend client of the
@@ -40,6 +40,14 @@ fn respond<T: Serialize>(res: Result<T, String>) -> Result<CallToolResult, Error
 pub struct CreateGraphArgs {
     /// The graph's goal, shown as its name in the UI, e.g. "Ship the billing v2 release".
     pub name: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CreateActorArgs {
+    /// Display name, unique among actors, e.g. "Andrew" or "codex".
+    pub name: String,
+    /// human (default) or agent.
+    pub kind: Option<ActorKind>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -75,7 +83,7 @@ pub struct CreateTaskArgs {
     /// IDs of tasks that must be DONE before this one can start.
     pub blocked_by: Option<Vec<String>>,
     pub tags: Option<Vec<String>>,
-    /// Assignee IDs.
+    /// Assignees: actor IDs or names (see list_actors; your own ID comes from whoami).
     pub users: Option<Vec<String>>,
     /// LOW, NORMAL (default) or HIGH.
     pub priority: Option<Priority>,
@@ -94,7 +102,7 @@ pub struct UpdateTaskArgs {
     pub status: Option<Status>,
     /// Replaces the whole tag list.
     pub tags: Option<Vec<String>>,
-    /// Replaces the whole assignee list.
+    /// Replaces the whole assignee list: actor IDs or names (see list_actors; yours: whoami).
     pub users: Option<Vec<String>>,
     /// LOW, NORMAL or HIGH.
     pub priority: Option<Priority>,
@@ -124,6 +132,33 @@ impl Meshwork {
     )]
     async fn whoami(&self, caller: Caller) -> Result<CallToolResult, ErrorData> {
         respond(Ok::<_, String>(caller.actor))
+    }
+
+    #[tool(
+        description = "List everyone who can be assigned to a task or be its reporter, people and \
+                       agents, with their ids, kinds and task counts. Use it to assign work to \
+                       someone else or to name a reporter; for yourself use whoami.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_actors(&self, caller: Caller) -> Result<CallToolResult, ErrorData> {
+        respond(caller.backend.list_actors().await)
+    }
+
+    #[tool(
+        description = "Add a person or agent who is not in list_actors yet, so tasks can be \
+                       assigned to them. Names are unique; returns the new actor with its id.",
+        annotations(read_only_hint = false)
+    )]
+    async fn create_actor(
+        &self,
+        caller: Caller,
+        Parameters(a): Parameters<CreateActorArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let actor = NewActor {
+            name: a.name,
+            kind: a.kind.unwrap_or(ActorKind::Human),
+        };
+        respond(caller.backend.create_actor(&actor).await)
     }
 
     #[tool(
@@ -301,7 +336,7 @@ impl Meshwork {
 #[tool_handler(
     name = "meshwork",
     instructions = "Meshwork is a task tracker where tasks are graph nodes and dependencies are explicit. \
-                    Call whoami to learn your actor id, list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
+                    Call whoami to learn your actor id (list_actors for everyone else), list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
                     update_task to move status, and link_tasks to record new dependencies."
 )]
 impl ServerHandler for Meshwork {}
