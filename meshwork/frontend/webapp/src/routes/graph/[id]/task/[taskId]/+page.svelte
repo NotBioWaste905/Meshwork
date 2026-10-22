@@ -48,6 +48,11 @@
 	let saving = $state(false);
 	let addingBlocker = $state(false);
 
+	// An open edit form or blocker picker: hold background refresh until it closes.
+	$effect(() => {
+		if (editing || addingBlocker) return graphStore.hold();
+	});
+
 	// SvelteKit reuses this component when navigating task -> task: drop per-task UI state.
 	$effect(() => {
 		void taskId;
