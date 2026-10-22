@@ -72,8 +72,14 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Graph {id, name, created_at})     # name is the goal, "" for unnamed/older graphs
 (:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph)
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
-(:Task)-[:ASSIGNED_TO]->(:User {id})
+(:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 ```
+
+Actors are global (not per graph). `name` is unique and never equal to another actor's `id`, so
+task `users` resolve by id first, then by name. API-created actors get UUID ids; actors migrated
+from the old free-text `(:User {id: <text>})` keep the text as id and name (`kind: agent` for
+`claude`). The migration (`connection::migrate`, run at startup after `ensure_indexes`) is
+idempotent; put future data migrations there too.
 
 `status` is stored as the API string: `TODO`, `IN_PROGRESS`, `DONE`, `REVIEW`, `BLOCKED`
 (`Status::as_str`); legacy `InProgress` is read via a serde alias.
@@ -90,6 +96,10 @@ API (`/v0/...`):
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`
 - `POST :graph/task/add/` — body `NewTask`, only `name` required; returns the created `Task`, 201
 - `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored
+- Task `users` are actor ids in responses; in requests each entry is an actor id or name,
+  unknown → 404 (validated before any write)
+- `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
+  taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). No delete yet.
 - `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
   dependency blocks dependee; on the canvas the edge goes dependency → dependee
 - Errors are `{message}` with 400/404/500; 409 when a new dependency would close a

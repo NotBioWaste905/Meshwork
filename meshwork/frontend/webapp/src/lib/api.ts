@@ -14,6 +14,7 @@ export type Task = {
 	description: string;
 	/** IDs of the tasks blocking this one. */
 	depends_on: string[];
+	/** IDs of the assigned actors. On input an actor may also be given by name. */
 	users: string[];
 	tags: string[];
 	status: Status;
@@ -34,6 +35,17 @@ export type Graph = {
 	task_count: number;
 	done_count: number;
 	blocked_count: number;
+};
+
+export type ActorKind = 'human' | 'agent';
+
+/** Someone who works on tasks, a person or an AI agent. Global, shared by all graphs. */
+export type Actor = {
+	/** A UUID; actors migrated from free-text assignees keep that text as their ID. */
+	id: string;
+	/** Unique among actors. */
+	name: string;
+	kind: ActorKind;
 };
 
 export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -84,6 +96,25 @@ export class MeshworkAPI {
 
 	renameGraph(graphId: string, name: string): Promise<Graph> {
 		return this.request('PUT', `/v0/${graphId}`, { name });
+	}
+
+	// Actor operations
+	/** All actors, by name. */
+	listActors(): Promise<Actor[]> {
+		return this.request('GET', '/v0/actors');
+	}
+
+	getActor(actorId: string): Promise<Actor> {
+		return this.request('GET', `/v0/actors/${actorId}`);
+	}
+
+	/** 409 when the name is taken. */
+	addActor(actor: { name: string; kind?: ActorKind }): Promise<Actor> {
+		return this.request('POST', '/v0/actors', actor);
+	}
+
+	updateActor(actorId: string, patch: Partial<Omit<Actor, 'id'>>): Promise<Actor> {
+		return this.request('PUT', `/v0/actors/${actorId}`, patch);
 	}
 
 	// Task operations

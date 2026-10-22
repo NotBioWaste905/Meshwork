@@ -4,13 +4,13 @@
 //! own, but a handler that runs several of them is not. Validation queries run
 //! first so that a rejected request leaves no partial state behind.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use falkordb::{AsyncGraph, QueryResult, Row, RowStream};
 use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
-use crate::schemas::{GraphInfo, Status, Task};
+use crate::schemas::{Actor, ActorKind, GraphInfo, Status, Task};
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
     let mut data = result.data;
@@ -167,7 +167,7 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
 }
 
 const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
-     OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:User) \
+     OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:Actor) \
      RETURN t.id AS id, t.name AS name, t.description AS description, \
             t.status AS status, t.tags AS tags, \
             collect(DISTINCT dep.id) AS dependencies, \
@@ -339,7 +339,8 @@ pub async fn set_dependencies(
     Ok(())
 }
 
-/// Replaces the task's assignees. Users are created on first mention.
+/// Replaces the task's assignees. `users` are actor IDs that must exist (see
+/// [`resolve_actors`]).
 pub async fn set_users(graph: &mut AsyncGraph, task_id: &str, users: &[String]) -> Result<()> {
     graph
         .query("MATCH (t:Task {id: $id})-[r:ASSIGNED_TO]->() DELETE r")
@@ -353,9 +354,9 @@ pub async fn set_users(graph: &mut AsyncGraph, task_id: &str, users: &[String]) 
     graph
         .query(
             "MATCH (t:Task {id: $id}) \
-             UNWIND $users AS user_id \
-             MERGE (u:User {id: user_id}) \
-             MERGE (t)-[:ASSIGNED_TO]->(u)",
+             UNWIND $users AS actor_id \
+             MATCH (a:Actor {id: actor_id}) \
+             MERGE (t)-[:ASSIGNED_TO]->(a)",
         )
         .with_param("id", task_id)
         .with_param("users", users.to_vec())
@@ -412,4 +413,214 @@ pub async fn disconnect(graph: &mut AsyncGraph, dependee: &str, dependency: &str
         .await
         .map_err(db_err)?;
     Ok(true)
+}
+
+const ACTOR_RETURN: &str = "RETURN a.id AS id, a.name AS name, a.kind AS kind";
+
+fn row_to_actor(row: &Row) -> Result<Actor> {
+    let kind: String = row.try_get("kind").map_err(db_err)?;
+    Ok(Actor {
+        id: row.try_get("id").map_err(db_err)?,
+        name: row.try_get("name").map_err(db_err)?,
+        kind: ActorKind::parse(&kind)
+            .ok_or_else(|| AppError::Internal(format!("Bad actor kind '{}' in DB", kind)))?,
+    })
+}
+
+/// All actors, by name.
+pub async fn list_actors(graph: &mut AsyncGraph) -> Result<Vec<Actor>> {
+    let q = format!(
+        "MATCH (a:Actor) {} ORDER BY toLower(name), id",
+        ACTOR_RETURN
+    );
+    let result = graph.query(q).execute().await.map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(row_to_actor)
+        .collect()
+}
+
+pub async fn get_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<Actor> {
+    let q = format!("MATCH (a:Actor {{id: $id}}) {}", ACTOR_RETURN);
+    let result = graph
+        .query(q)
+        .with_param("id", actor_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    match collect_rows(result).await?.first() {
+        Some(row) => row_to_actor(row),
+        None => Err(AppError::NotFound(format!("Actor {} not found", actor_id))),
+    }
+}
+
+/// Rejects `name` if another actor (not `actor_id`) already has it as its name
+/// or ID: task assignees are resolved by either, so both must stay unambiguous.
+pub async fn ensure_actor_name_free(
+    graph: &mut AsyncGraph,
+    name: &str,
+    actor_id: &str,
+) -> Result<()> {
+    let result = graph
+        .query(
+            "MATCH (a:Actor) WHERE (a.name = $name OR a.id = $name) AND a.id <> $id \
+             RETURN count(a) AS n",
+        )
+        .with_param("name", name)
+        .with_param("id", actor_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    if first_count(&collect_rows(result).await?)? > 0 {
+        return Err(AppError::Conflict(format!(
+            "An actor named '{}' already exists",
+            name
+        )));
+    }
+    Ok(())
+}
+
+pub async fn create_actor(
+    graph: &mut AsyncGraph,
+    actor_id: &str,
+    name: &str,
+    kind: ActorKind,
+) -> Result<()> {
+    graph
+        .query("CREATE (:Actor {id: $id, name: $name, kind: $kind})")
+        .with_param("id", actor_id)
+        .with_param("name", name)
+        .with_param("kind", kind.as_str())
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Updates the properties that are `Some`.
+pub async fn update_actor(
+    graph: &mut AsyncGraph,
+    actor_id: &str,
+    name: Option<&str>,
+    kind: Option<ActorKind>,
+) -> Result<()> {
+    let sets: Vec<&str> = [
+        name.map(|_| "a.name = $name"),
+        kind.map(|_| "a.kind = $kind"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if sets.is_empty() {
+        return Ok(());
+    }
+    let q = format!("MATCH (a:Actor {{id: $id}}) SET {}", sets.join(", "));
+    let mut query = graph.query(q).with_param("id", actor_id);
+    if let Some(name) = name {
+        query = query.with_param("name", name);
+    }
+    if let Some(kind) = kind {
+        query = query.with_param("kind", kind.as_str());
+    }
+    query.execute().await.map_err(db_err)?;
+    Ok(())
+}
+
+/// Maps each reference — an actor ID or, failing that, an actor name — to the
+/// actor's ID, dropping duplicates and keeping the order. Unknown references
+/// are a 404.
+pub async fn resolve_actors(graph: &mut AsyncGraph, refs: &[String]) -> Result<Vec<String>> {
+    if refs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let result = graph
+        .query(
+            "MATCH (a:Actor) WHERE a.id IN $refs OR a.name IN $refs \
+             RETURN a.id AS id, a.name AS name",
+        )
+        .with_param("refs", refs.to_vec())
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let mut by_id = BTreeSet::new();
+    let mut by_name = BTreeMap::new();
+    for row in collect_rows(result).await? {
+        let id: String = row.try_get("id").map_err(db_err)?;
+        let name: String = row.try_get("name").map_err(db_err)?;
+        by_name.insert(name, id.clone());
+        by_id.insert(id);
+    }
+
+    let mut ids: Vec<String> = Vec::new();
+    let mut unknown: Vec<&str> = Vec::new();
+    for r in refs {
+        let id = if by_id.contains(r) {
+            Some(r.clone())
+        } else {
+            by_name.get(r).cloned()
+        };
+        match id {
+            Some(id) if !ids.contains(&id) => ids.push(id),
+            Some(_) => {}
+            None => unknown.push(r),
+        }
+    }
+    if !unknown.is_empty() {
+        return Err(AppError::NotFound(format!(
+            "Unknown actors {:?}; create them with POST /v0/actors",
+            unknown
+        )));
+    }
+    Ok(ids)
+}
+
+/// Free-text assignees that were AI agents by project convention.
+const KNOWN_AGENT_NAMES: [&str; 1] = ["claude"];
+
+/// Turns the old free-text assignees, `(:User {id: <text>})` nodes, into
+/// actors: each becomes `(:Actor {id: <text>, name: <text>})`, so `Task.users`
+/// returns the same strings as before, and its `ASSIGNED_TO` edges move over.
+/// `kind` is `agent` for [`KNOWN_AGENT_NAMES`], `human` otherwise. Idempotent,
+/// and safe to rerun after an interruption: every step only acts on what is
+/// still left. Returns the number of `:User` nodes migrated.
+pub async fn migrate_users_to_actors(graph: &mut AsyncGraph) -> Result<i64> {
+    let result = graph
+        .query("MATCH (u:User) RETURN count(u) AS n")
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let users = first_count(&collect_rows(result).await?)?;
+    if users == 0 {
+        return Ok(0);
+    }
+    let agents: Vec<String> = KNOWN_AGENT_NAMES.iter().map(|s| s.to_string()).collect();
+    graph
+        .query(
+            "MATCH (u:User) \
+             MERGE (a:Actor {id: u.id}) \
+             ON CREATE SET a.name = u.id, \
+                           a.kind = CASE WHEN toLower(u.id) IN $agents \
+                                         THEN 'agent' ELSE 'human' END",
+        )
+        .with_param("agents", agents)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    graph
+        .query(
+            "MATCH (t:Task)-[r:ASSIGNED_TO]->(u:User) \
+             MATCH (a:Actor {id: u.id}) \
+             MERGE (t)-[:ASSIGNED_TO]->(a) \
+             DELETE r",
+        )
+        .execute()
+        .await
+        .map_err(db_err)?;
+    graph
+        .query("MATCH (u:User) DETACH DELETE u")
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(users)
 }

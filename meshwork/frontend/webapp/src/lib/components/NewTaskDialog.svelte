@@ -3,6 +3,7 @@
 	import { Status } from '$lib/api';
 	import { graphStore } from '$lib/graphStore.svelte';
 	import { shortId, STATUS_META } from '$lib/status';
+	import AssigneePicker from './AssigneePicker.svelte';
 
 	let { onCreated }: { onCreated?: (id: string) => void } = $props();
 
@@ -10,6 +11,7 @@
 	let description = $state('');
 	let kind = $state<'task' | 'chore'>('task');
 	let status = $state<Status>(Status.TODO);
+	/** Actor ID, '' for unassigned. */
 	let assignee = $state('');
 	let blockers = $state<string[]>([]);
 	let tags = $state<string[]>([]);
@@ -66,7 +68,7 @@
 			description,
 			status,
 			tags: allTags,
-			users: assignee.trim() ? [assignee.trim()] : [],
+			users: assignee ? [assignee] : [],
 			depends_on: blockers
 		});
 		saving = false;
@@ -163,20 +165,11 @@
 					</div>
 					<div class="flex min-w-0 flex-col gap-1.5">
 						<label for="nt-assignee" class="text-sm font-medium">Assignee</label>
-						<input
+						<AssigneePicker
 							id="nt-assignee"
-							type="text"
-							class="field"
-							placeholder="Unassigned"
-							list="nt-assignee-options"
-							autocomplete="off"
-							bind:value={assignee}
+							value={assignee}
+							onchange={(actorId) => (assignee = actorId)}
 						/>
-						<datalist id="nt-assignee-options">
-							{#each graphStore.users as user (user)}
-								<option value={user}></option>
-							{/each}
-						</datalist>
 					</div>
 				</div>
 

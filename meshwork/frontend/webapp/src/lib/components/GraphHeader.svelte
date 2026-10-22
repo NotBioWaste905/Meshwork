@@ -1,6 +1,6 @@
 <script lang="ts">
 	import TopBar from './TopBar.svelte';
-	import Avatar from './Avatar.svelte';
+	import ActorAvatar from './ActorAvatar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
 
 	let { view }: { view: 'graph' | 'board' | 'table' } = $props();
@@ -45,12 +45,12 @@
 		{#if shown.length > 0}
 			<div class="flex" role="group" aria-label="Assignees in this graph">
 				{#each shown as user, i (user)}
-					<span class={i > 0 ? '-ml-2' : ''}><Avatar name={user} size={30} ring /></span>
+					<span class={i > 0 ? '-ml-2' : ''}><ActorAvatar id={user} size={30} ring /></span>
 				{/each}
 				{#if hidden.length > 0}
 					<span
 						class="bg-surface-2 text-ink-3 -ml-2 inline-flex size-[30px] items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold"
-						title={hidden.join(', ')}>+{hidden.length}</span
+						title={hidden.map((id) => graphStore.actorName(id)).join(', ')}>+{hidden.length}</span
 					>
 				{/if}
 			</div>

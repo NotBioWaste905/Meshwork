@@ -38,6 +38,7 @@ pub struct Task {
     pub description: String,
     /// IDs of the tasks this one depends on, i.e. the tasks blocking it.
     pub depends_on: Vec<String>,
+    /// IDs of the assigned actors.
     pub users: Vec<String>,
     pub tags: Vec<String>,
     pub status: Status,
@@ -53,6 +54,7 @@ pub struct NewTask {
     pub description: String,
     #[serde(default)]
     pub depends_on: Vec<String>,
+    /// Actors to assign, each given by ID or by name.
     #[serde(default)]
     pub users: Vec<String>,
     #[serde(default)]
@@ -69,6 +71,7 @@ pub struct TaskUpdate {
     pub name: Option<String>,
     pub description: Option<String>,
     pub depends_on: Option<Vec<String>>,
+    /// Actors to assign, each given by ID or by name.
     pub users: Option<Vec<String>>,
     pub tags: Option<Vec<String>>,
     pub status: Option<Status>,
@@ -117,4 +120,56 @@ pub struct GraphInfo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MessageResponse {
     pub message: String,
+}
+
+/// What an actor is. Humans and agents are assigned the same way; the kind is
+/// for display and, later, for access rules.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ActorKind {
+    #[default]
+    Human,
+    Agent,
+}
+
+impl ActorKind {
+    /// Value stored in the `kind` property of an `:Actor` node.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ActorKind::Human => "human",
+            ActorKind::Agent => "agent",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<ActorKind> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+}
+
+/// Someone who works on tasks: a person or an AI agent. Actors are global,
+/// shared by all graphs; `Task.users` holds actor IDs.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Actor {
+    /// A UUID for actors created through the API; actors migrated from the old
+    /// free-text assignees keep that text as their ID.
+    pub id: String,
+    /// Unique, and never equal to another actor's ID, so a task's `users` may
+    /// name an actor by either.
+    pub name: String,
+    pub kind: ActorKind,
+}
+
+/// Request body for creating an actor.
+#[derive(Deserialize, Debug)]
+pub struct NewActor {
+    pub name: String,
+    #[serde(default)]
+    pub kind: ActorKind,
+}
+
+/// Request body for editing an actor. Omitted fields are left unchanged.
+#[derive(Deserialize, Debug, Default)]
+pub struct ActorUpdate {
+    pub name: Option<String>,
+    pub kind: Option<ActorKind>,
 }

@@ -13,7 +13,11 @@ use axum::{
     http::{header, Method, Request, StatusCode},
     Router,
 };
-use backend_rs::{app, connection, cors_layer, schemas::Task, AppState};
+use backend_rs::{
+    app, connection, cors_layer,
+    schemas::{Actor, ActorKind, Task},
+    AppState,
+};
 use falkordb::AsyncGraph;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -85,6 +89,12 @@ impl TestApp {
         serde_json::from_value(body).unwrap()
     }
 
+    async fn add_actor(&self, body: Value) -> Actor {
+        let (status, body) = self.call(Method::POST, "/v0/actors", Some(body)).await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        serde_json::from_value(body).unwrap()
+    }
+
     async fn all_tasks(&self, graph_id: &str) -> Vec<Task> {
         let (status, body) = self
             .call(Method::GET, &format!("/v0/{graph_id}/all_tasks"), None)
@@ -123,6 +133,7 @@ async fn full_task_roundtrip() {
     let graph_id = app.create_graph().await;
 
     let blocker = app.add_task(&graph_id, json!({ "name": "Backend" })).await;
+    let andrew = app.add_actor(json!({ "name": "andrew" })).await;
     let task = app
         .add_task(
             &graph_id,
@@ -131,13 +142,13 @@ async fn full_task_roundtrip() {
                 "description": "front + back",
                 "status": "IN_PROGRESS",
                 "tags": ["v0.1", "infra"],
-                "users": ["andrew"],
+                "users": [andrew.id],
                 "depends_on": [blocker.id],
             }),
         )
         .await;
     assert_eq!(task.depends_on, vec![blocker.id.clone()]);
-    assert_eq!(task.users, vec!["andrew".to_string()]);
+    assert_eq!(task.users, vec![andrew.id.clone()]);
     assert_eq!(task.tags, vec!["v0.1".to_string(), "infra".to_string()]);
 
     let (status, body) = app
@@ -162,6 +173,7 @@ async fn edit_task_partial_and_whole() {
         .add_task(&graph_id, json!({ "name": "Task", "tags": ["a"] }))
         .await;
     let uri = format!("/v0/{graph_id}/task/{}", task.id);
+    let bob = app.add_actor(json!({ "name": "bob" })).await;
 
     // Partial: only the status changes.
     let (status, body) = app
@@ -181,7 +193,8 @@ async fn edit_task_partial_and_whole() {
     let (status, body) = app.call(Method::PUT, &uri, Some(whole)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["name"], "Renamed");
-    assert_eq!(body["users"], json!(["bob"]));
+    // Assigned by name, returned as the actor's ID.
+    assert_eq!(body["users"], json!([bob.id]));
     assert_eq!(body["depends_on"], json!([other.id]));
 
     let (status, _) = app
@@ -394,8 +407,9 @@ async fn ready_tasks_follow_dependencies() {
     let b = app
         .add_task(&graph_id, json!({ "name": "B", "depends_on": [a.id] }))
         .await;
+    let alice = app.add_actor(json!({ "name": "alice" })).await;
     let c = app
-        .add_task(&graph_id, json!({ "name": "C", "users": ["alice"] }))
+        .add_task(&graph_id, json!({ "name": "C", "users": [alice.id] }))
         .await;
     let ready = |unassigned_only: bool| {
         let uri = format!("/v0/{graph_id}/ready_tasks?unassigned_only={unassigned_only}");
@@ -612,6 +626,208 @@ async fn graph_metadata_and_listing() {
         .call(Method::PUT, "/v0/missing", Some(json!({ "name": "X" })))
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn actors_crud() {
+    let app = TestApp::new().await;
+
+    let (status, body) = app.call(Method::GET, "/v0/actors", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body, json!([]));
+
+    let ann = app.add_actor(json!({ "name": "  Ann  " })).await;
+    assert_eq!(ann.name, "Ann");
+    assert_eq!(ann.kind, ActorKind::Human);
+    let bot = app
+        .add_actor(json!({ "name": "bot", "kind": "agent" }))
+        .await;
+    assert_eq!(bot.kind, ActorKind::Agent);
+
+    let (status, body) = app.call(Method::GET, "/v0/actors", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        serde_json::from_value::<Vec<Actor>>(body).unwrap(),
+        vec![ann.clone(), bot.clone()]
+    );
+    let (status, body) = app
+        .call(Method::GET, &format!("/v0/actors/{}", bot.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(serde_json::from_value::<Actor>(body).unwrap(), bot);
+
+    // Names are unique, and may not shadow another actor's ID either.
+    for name in ["Ann", bot.id.as_str(), " "] {
+        let (status, _) = app
+            .call(Method::POST, "/v0/actors", Some(json!({ "name": name })))
+            .await;
+        assert!(
+            status == StatusCode::CONFLICT || (name == " " && status == StatusCode::BAD_REQUEST),
+            "{name}: {status}"
+        );
+    }
+    let (status, _) = app
+        .call(
+            Method::POST,
+            "/v0/actors",
+            Some(json!({ "name": "x", "kind": "robot" })),
+        )
+        .await;
+    assert!(status.is_client_error());
+
+    // Partial edit; keeping one's own name is fine, taking another's is not.
+    let uri = format!("/v0/actors/{}", ann.id);
+    let (status, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "kind": "agent" })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        json!({ "id": ann.id, "name": "Ann", "kind": "agent" })
+    );
+    let (status, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "name": "Ann" })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, _) = app
+        .call(Method::PUT, &uri, Some(json!({ "name": "bot" })))
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = app
+        .call(Method::PUT, &uri, Some(json!({ "name": "" })))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            "/v0/actors/missing",
+            Some(json!({ "name": "Z" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app.call(Method::GET, "/v0/actors/missing", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn assignees_must_be_actors() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "Ann" })).await;
+    let bot = app
+        .add_actor(json!({ "name": "bot", "kind": "agent" }))
+        .await;
+
+    // By ID or by name, duplicates collapse.
+    let task = app
+        .add_task(
+            &graph_id,
+            json!({ "name": "T", "users": [ann.id, "Ann", "bot"] }),
+        )
+        .await;
+    let mut users = task.users.clone();
+    users.sort();
+    let mut expected = vec![ann.id.clone(), bot.id.clone()];
+    expected.sort();
+    assert_eq!(users, expected);
+
+    // An unknown actor is a 404 and changes nothing.
+    let (status, body) = app
+        .call(
+            Method::POST,
+            &format!("/v0/{graph_id}/task/add/"),
+            Some(json!({ "name": "U", "users": ["nobody"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert!(body["message"].as_str().unwrap().contains("nobody"));
+    let uri = format!("/v0/{graph_id}/task/{}", task.id);
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &uri,
+            Some(json!({ "name": "Renamed", "users": ["nobody"] })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(app.all_tasks(&graph_id).await, vec![task.clone()]);
+
+    // Renaming an actor keeps its assignments.
+    app.call(
+        Method::PUT,
+        &format!("/v0/actors/{}", ann.id),
+        Some(json!({ "name": "Anna" })),
+    )
+    .await;
+    let (status, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "users": ["Anna"] })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["users"], json!([ann.id]));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn free_text_users_migrate_to_actors() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let a = app.add_task(&graph_id, json!({ "name": "A" })).await;
+    let b = app.add_task(&graph_id, json!({ "name": "B" })).await;
+    // The model before actors: assignees were (:User {id: <free text>}).
+    app.graph
+        .query(
+            "MATCH (a:Task {id: $a}), (b:Task {id: $b}) \
+             MERGE (andrew:User {id: 'andrew'}) MERGE (claude:User {id: 'Claude'}) \
+             MERGE (a)-[:ASSIGNED_TO]->(andrew) MERGE (a)-[:ASSIGNED_TO]->(claude) \
+             MERGE (b)-[:ASSIGNED_TO]->(claude)",
+        )
+        .with_param("a", a.id.as_str())
+        .with_param("b", b.id.as_str())
+        .execute()
+        .await
+        .unwrap();
+
+    // Twice: the second run must be a no-op.
+    connection::migrate(&mut app.graph).await.unwrap();
+    connection::migrate(&mut app.graph).await.unwrap();
+
+    let (status, body) = app.call(Method::GET, "/v0/actors", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        json!([
+            { "id": "andrew", "name": "andrew", "kind": "human" },
+            { "id": "Claude", "name": "Claude", "kind": "agent" },
+        ])
+    );
+    let tasks = app.all_tasks(&graph_id).await;
+    let mut a_users = tasks.iter().find(|t| t.id == a.id).unwrap().users.clone();
+    a_users.sort();
+    assert_eq!(a_users, vec!["Claude".to_string(), "andrew".to_string()]);
+    assert_eq!(
+        tasks.iter().find(|t| t.id == b.id).unwrap().users,
+        vec!["Claude".to_string()]
+    );
+
+    let mut result = app
+        .graph
+        .query("MATCH (u:User) RETURN count(u) AS n")
+        .execute()
+        .await
+        .unwrap();
+    let row = futures::StreamExt::next(&mut result.data)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("n").unwrap(), 0);
 
     app.cleanup().await;
 }
