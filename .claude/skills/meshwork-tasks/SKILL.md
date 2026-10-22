@@ -40,8 +40,9 @@ status in the graph is the truth.
    Prefer the lowest milestone tag, then `HIGH` priority, then the task that unblocks the most (`get_task_context`
    → `blocks`). If the user named a task, use that one. Skip tasks that need the user's machine
    or accounts (`ops` like cron/launchd, secrets) unless the user asked — propose them instead.
-2. **Read context.** `get_task_context(graph_id, task_id)`: description, blockers' results,
-   what it unblocks. Read the relevant code and CLAUDE.md before deciding the approach.
+2. **Read context.** `get_task_context(graph_id, task_id)`: description, blockers, what it
+   unblocks. Blockers' results and hand-offs are in their comments (`list_comments`), and so
+   are notes on the task itself. Read the relevant code and CLAUDE.md before deciding the approach.
 3. **Take it.** `claim_task(graph_id, task_id)`: assigns you and sets `IN_PROGRESS` in one
    atomic step, only if the task is ready and nobody else has it. If it fails, someone was faster
    or the task is not ready: pick another. When dispatching subagents, each claims its own task
@@ -54,17 +55,17 @@ status in the graph is the truth.
    `link_tasks`. If it blocks *your* task, link it, put your task back to `TODO` with
    `users: []`, and say so in your report.
 6. **Hand in.** Commit (short imperative English message), push, open a PR into `dev`. Then
-   `update_task(status: REVIEW, pr_url: <PR URL>, description: <old description + result block>)`. Until task
-   artifacts exist, the result goes at the end of the description:
+   `update_task(status: REVIEW, pr_url: <PR URL>)` and post the result as a comment,
+   `add_comment(graph_id, task_id, body)`:
 
    ```
-   ---
-   Итог (claude, YYYY-MM-DD): что сделано, как проверено, что осталось/оговорки.
-   PR: https://github.com/NotBioWaste905/Meshwork/pull/N
-   Ветка: feat/…
+   **Итог:** что сделано, как проверено, что осталось/оговорки.
+   PR: https://github.com/NotBioWaste905/Meshwork/pull/N · ветка `feat/…`
    ```
 
-   Keep the original description above the block intact; `update_task` replaces the whole text.
+   Don't rewrite the description to add results: `update_task` replaces the whole text, which
+   costs tokens and can wipe someone's edits. The description stays "what to do"; comments are
+   what happened. (Older tasks keep their results at the end of the description.)
 7. **Done.** `DONE` only after the PR is merged into `dev` (check `gh pr view N --json state`).
    Agents merge only when the user asked for it. After merging, set `DONE` and check
    `list_ready_tasks` — newly unblocked tasks are the next candidates.
@@ -72,11 +73,11 @@ status in the graph is the truth.
 ## Rules
 
 - Never delete tasks (there is no tool for it on purpose). Obsolete task → `DONE` with a
-  result block saying why it is not needed, after the user agrees.
+  comment saying why it is not needed, after the user agrees.
 - Changing scope or edges of tasks you don't own: fine for obvious fixes (typo, missing edge);
   for re-planning (dropping a dependency, merging tasks) ask the user first and note the
-  decision in the description.
+  decision in a comment.
 - Don't leave tasks `IN_PROGRESS` when you stop: either `REVIEW` with a PR, or back to `TODO`
-  with `users: []` and a note on what was done so far.
+  with `users: []` and a comment on what was done so far (branch, what is left).
 - Report to the user in terms of the graph: which tasks you took, which moved to `REVIEW` /
   `DONE`, which you created, and what is ready next.
