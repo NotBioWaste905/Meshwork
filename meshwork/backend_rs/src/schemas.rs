@@ -319,3 +319,23 @@ pub struct IssuedToken {
     pub token: String,
     pub info: TokenInfo,
 }
+
+/// One entry of a task's change log, as `GET /v0/:graph/task/:id/events` returns it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Event {
+    pub id: String,
+    /// `created`, `field` (see `field`), `blocker_added` or `blocker_removed` (`to` is the
+    /// blocking task's ID).
+    pub kind: String,
+    /// For `field` events: `name`, `description`, `status`, `priority`, `pr_url`, `reporter`,
+    /// `users` or `tags`.
+    pub field: Option<String>,
+    /// Value before; `null` when there was none or it is not recorded (the description).
+    pub from: serde_json::Value,
+    /// Value after.
+    pub to: serde_json::Value,
+    /// ID of the actor who made the change; `None` without a token or once the actor is gone.
+    pub actor: Option<String>,
+    /// Milliseconds since the epoch.
+    pub at: i64,
+}

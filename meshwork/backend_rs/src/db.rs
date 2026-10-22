@@ -11,8 +11,8 @@ use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
 use crate::schemas::{
-    Actor, ActorKind, Comment, GraphInfo, NewTask, Position, Priority, Status, Task, TaskUpdate,
-    TokenInfo,
+    Actor, ActorKind, Comment, Event, GraphInfo, NewTask, Position, Priority, Status, Task,
+    TaskUpdate, TokenInfo,
 };
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
@@ -592,19 +592,102 @@ pub async fn set_reporter(
     Ok(())
 }
 
-/// Deletes the task with its edges and its comments.
+/// Deletes the task with its edges, its comments and its change log.
 pub async fn delete_task(graph: &mut AsyncGraph, task_id: &str) -> Result<()> {
     graph
         .query(
             "MATCH (t:Task {id: $id}) \
-             OPTIONAL MATCH (c:Comment)-[:ON]->(t) \
-             DETACH DELETE c, t",
+             OPTIONAL MATCH (x)-[:ON]->(t) \
+             DETACH DELETE x, t",
         )
         .with_param("id", task_id)
         .execute()
         .await
         .map_err(db_err)?;
     Ok(())
+}
+
+/// Appends changes to the task's log as `(:Event {id, kind, field, from, to, at, seq})-[:ON]->
+/// (:Task)`, by `actor` when known (`(:Event)-[:BY]->(:Actor)`). One query for all of them;
+/// `seq` keeps their order within the same millisecond. `from`/`to` are stored as JSON text.
+pub async fn add_events(
+    graph: &mut AsyncGraph,
+    task_id: &str,
+    actor_id: Option<&str>,
+    changes: &[crate::events::Change],
+) -> Result<()> {
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<String> = changes
+        .iter()
+        .map(|_| uuid::Uuid::new_v4().to_string())
+        .collect();
+    let kinds: Vec<&str> = changes.iter().map(|c| c.kind).collect();
+    let fields: Vec<&str> = changes.iter().map(|c| c.field.unwrap_or("")).collect();
+    let froms: Vec<String> = changes.iter().map(|c| c.from.to_string()).collect();
+    let tos: Vec<String> = changes.iter().map(|c| c.to.to_string()).collect();
+    // Only these two fixed fragments differ; values are parameters.
+    let (by_match, by_create) = match actor_id {
+        Some(_) => ("MATCH (a:Actor {id: $actor}) ", ", (e)-[:BY]->(a)"),
+        None => ("", ""),
+    };
+    let q = format!(
+        "MATCH (t:Task {{id: $task}}) {by_match}\
+         UNWIND range(0, size($ids) - 1) AS i \
+         CREATE (e:Event {{id: $ids[i], kind: $kinds[i], field: $fields[i], \
+                          from: $froms[i], to: $tos[i], at: timestamp(), seq: i}})-[:ON]->(t){by_create}"
+    );
+    let mut query = graph
+        .query(q)
+        .with_param("task", task_id)
+        .with_param("ids", ids)
+        .with_param("kinds", kinds)
+        .with_param("fields", fields)
+        .with_param("froms", froms)
+        .with_param("tos", tos);
+    if let Some(actor_id) = actor_id {
+        query = query.with_param("actor", actor_id);
+    }
+    query.execute().await.map_err(db_err)?;
+    Ok(())
+}
+
+/// The task's change log, oldest first.
+pub async fn list_events(graph: &mut AsyncGraph, task_id: &str) -> Result<Vec<Event>> {
+    let result = graph
+        .query(
+            "MATCH (e:Event)-[:ON]->(:Task {id: $task}) \
+             OPTIONAL MATCH (e)-[:BY]->(a:Actor) \
+             RETURN e.id AS id, e.kind AS kind, e.field AS field, e.from AS from, e.to AS to, \
+                    e.at AS at, a.id AS actor \
+             ORDER BY e.at, e.seq",
+        )
+        .with_param("task", task_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let json = |row: &Row, name: &str| -> Result<serde_json::Value> {
+        let text: String = row.try_get(name).map_err(db_err)?;
+        serde_json::from_str(&text)
+            .map_err(|e| AppError::Internal(format!("Bad event {} in DB: {}", name, e)))
+    };
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(|row| {
+            let field: String = row.try_get("field").map_err(db_err)?;
+            Ok(Event {
+                id: row.try_get("id").map_err(db_err)?,
+                kind: row.try_get("kind").map_err(db_err)?,
+                field: (!field.is_empty()).then_some(field),
+                from: json(row, "from")?,
+                to: json(row, "to")?,
+                actor: row.try_get("actor").map_err(db_err)?,
+                at: row.try_get("at").map_err(db_err)?,
+            })
+        })
+        .collect()
 }
 
 /// Stores a comment as `(:Comment {id, body, created_at})-[:ON]->(:Task)` with
@@ -860,9 +943,9 @@ pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Resu
         .map_err(db_err)?;
     graph
         .query(
-            "MATCH (c:Comment)-[r:BY]->(:Actor {id: $from}) \
+            "MATCH (x)-[r:BY]->(:Actor {id: $from}) \
              MATCH (d:Actor {id: $into}) \
-             CREATE (c)-[:BY]->(d) \
+             CREATE (x)-[:BY]->(d) \
              DELETE r",
         )
         .with_param("from", from)

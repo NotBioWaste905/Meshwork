@@ -20,14 +20,16 @@ pub mod auth;
 pub mod connection;
 mod db;
 pub mod error;
+pub mod events;
 pub mod frontier;
 pub mod schemas;
 
 use error::{AppError, Result};
+use events::Change;
 use schemas::{
-    Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    IssuedToken, LayoutUpdate, MergeActors, MessageResponse, NewActor, NewComment, NewGraph,
-    NewTask, NewToken, OwnToken, Status, Task, TaskUpdate,
+    Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, Event, GraphInfo,
+    GraphUpdate, IssuedToken, LayoutUpdate, MergeActors, MessageResponse, NewActor, NewComment,
+    NewGraph, NewTask, NewToken, OwnToken, Status, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -74,6 +76,7 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
             get(get_task).put(edit_task).delete(delete_task),
         )
         .route("/v0/:graph_id/task/:task_id/claim", post(claim_task))
+        .route("/v0/:graph_id/task/:task_id/events", get(list_events))
         .route(
             "/v0/:graph_id/task/:task_id/comments",
             get(list_comments).post(add_comment),
@@ -389,6 +392,7 @@ async fn add_task(
     if let Some(actor) = &caller.0 {
         db::set_created_by(&mut graph, db::Created::Task, &id, &actor.id).await?;
     }
+    db::add_events(&mut graph, &id, actor_id(&caller), &[Change::created()]).await?;
 
     let created = db::get_task(&mut graph, &graph_id, &id).await?;
     Ok((StatusCode::CREATED, Json(created)))
@@ -432,6 +436,7 @@ async fn get_task(
 async fn edit_task(
     State(state): State<AppState>,
     Path((graph_id, task_id)): Path<(String, String)>,
+    Extension(caller): Extension<auth::Caller>,
     Json(update): Json<TaskUpdate>,
 ) -> Result<Json<Task>> {
     info!("Editing task '{}' in graph '{}'", task_id, graph_id);
@@ -445,7 +450,7 @@ async fn edit_task(
     }
 
     let mut graph = state.graph.clone();
-    db::get_task(&mut graph, &graph_id, &task_id).await?;
+    let before = db::get_task(&mut graph, &graph_id, &task_id).await?;
     if let Some(deps) = &update.depends_on {
         if deps.contains(&task_id) {
             return Err(AppError::BadRequest(
@@ -478,7 +483,38 @@ async fn edit_task(
     }
     db::touch_task(&mut graph, &task_id).await?;
 
-    Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
+    let after = db::get_task(&mut graph, &graph_id, &task_id).await?;
+    let mut changes = events::diff(&before, &after);
+    changes.extend(
+        after
+            .depends_on
+            .iter()
+            .filter(|d| !before.depends_on.contains(d))
+            .map(|d| Change::blocker(d, true)),
+    );
+    changes.extend(
+        before
+            .depends_on
+            .iter()
+            .filter(|d| !after.depends_on.contains(d))
+            .map(|d| Change::blocker(d, false)),
+    );
+    db::add_events(&mut graph, &task_id, actor_id(&caller), &changes).await?;
+    Ok(Json(after))
+}
+
+/// The ID of the request's actor, if it has a token.
+fn actor_id(caller: &auth::Caller) -> Option<&str> {
+    caller.0.as_ref().map(|actor| actor.id.as_str())
+}
+
+async fn list_events(
+    State(state): State<AppState>,
+    Path((graph_id, task_id)): Path<(String, String)>,
+) -> Result<Json<Vec<Event>>> {
+    let mut graph = state.graph.clone();
+    db::get_task(&mut graph, &graph_id, &task_id).await?;
+    Ok(Json(db::list_events(&mut graph, &task_id).await?))
 }
 
 /// One actor by ID or name; 404 if there is none.
@@ -513,9 +549,18 @@ async fn claim_task(
         .0
         .ok_or_else(|| AppError::Unauthorized("Claiming needs a bearer token".to_string()))?;
     let mut graph = state.graph.clone();
+    let before = db::get_task(&mut graph, &graph_id, &task_id).await?;
     if db::claim_task(&mut graph, &graph_id, &task_id, &actor.id).await? {
         info!("Task '{}' claimed by '{}'", task_id, actor.name);
-        return Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?));
+        let after = db::get_task(&mut graph, &graph_id, &task_id).await?;
+        db::add_events(
+            &mut graph,
+            &task_id,
+            Some(&actor.id),
+            &events::diff(&before, &after),
+        )
+        .await?;
+        return Ok(Json(after));
     }
     // Not claimed: say why (404 if there is no such task).
     let task = db::get_task(&mut graph, &graph_id, &task_id).await?;
@@ -647,6 +692,7 @@ async fn delete_task(
 async fn connect_nodes(
     State(state): State<AppState>,
     Path(graph_id): Path<String>,
+    Extension(caller): Extension<auth::Caller>,
     Json(request): Json<ConnectNodesRequest>,
 ) -> Result<Json<MessageResponse>> {
     info!(
@@ -676,8 +722,19 @@ async fn connect_nodes(
         std::slice::from_ref(&request.node_dependency),
     )
     .await?;
+    let before = db::get_task(&mut graph, &graph_id, &request.node_dependee).await?;
     db::connect(&mut graph, &request.node_dependee, &request.node_dependency).await?;
     db::touch_task(&mut graph, &request.node_dependee).await?;
+    if !before.depends_on.contains(&request.node_dependency) {
+        let change = Change::blocker(&request.node_dependency, true);
+        db::add_events(
+            &mut graph,
+            &request.node_dependee,
+            actor_id(&caller),
+            &[change],
+        )
+        .await?;
+    }
     Ok(Json(MessageResponse {
         message: format!(
             "Nodes {} and {} connected",
@@ -689,6 +746,7 @@ async fn connect_nodes(
 async fn disconnect_nodes(
     State(state): State<AppState>,
     Path(graph_id): Path<String>,
+    Extension(caller): Extension<auth::Caller>,
     Json(request): Json<ConnectNodesRequest>,
 ) -> Result<Json<MessageResponse>> {
     info!(
@@ -713,6 +771,14 @@ async fn disconnect_nodes(
         )));
     }
     db::touch_task(&mut graph, &request.node_dependee).await?;
+    let change = Change::blocker(&request.node_dependency, false);
+    db::add_events(
+        &mut graph,
+        &request.node_dependee,
+        actor_id(&caller),
+        &[change],
+    )
+    .await?;
     Ok(Json(MessageResponse {
         message: format!(
             "Nodes {} and {} disconnected",

@@ -1780,3 +1780,152 @@ async fn layout_positions_persist() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn change_log_events() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+    let blocker = app.add_task(&graph_id, json!({ "name": "Blocker" })).await;
+    let (_, body) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &format!("/v0/{graph_id}/task/add/"),
+            Some(json!({ "name": "T" })),
+        )
+        .await;
+    let task: Task = serde_json::from_value(body).unwrap();
+    let uri = format!("/v0/{graph_id}/task/{}", task.id);
+    let events = || {
+        let app = &app;
+        let uri = format!("{uri}/events");
+        async move {
+            let (status, body) = app.call(Method::GET, &uri, None).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            body.as_array().unwrap().clone()
+        }
+    };
+
+    // Created, by the token's actor.
+    let log = events().await;
+    assert_eq!(log.len(), 1);
+    assert_eq!(
+        (&log[0]["kind"], &log[0]["actor"]),
+        (&json!("created"), &json!(ann.id))
+    );
+
+    // One PUT, several fields: one event each; unchanged fields log nothing; the
+    // description is logged as changed without its text.
+    app.call_as(
+        Some(&ann_token),
+        Method::PUT,
+        &uri,
+        Some(json!({
+            "name": "T2", "status": "IN_PROGRESS", "users": ["bob"],
+            "description": "secret plan", "tags": [], "depends_on": [blocker.id]
+        })),
+    )
+    .await;
+    let log = events().await;
+    let summary: Vec<(String, String)> = log[1..]
+        .iter()
+        .map(|e| {
+            (
+                e["kind"].as_str().unwrap().to_string(),
+                e["field"].as_str().unwrap_or("").to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("field", "name"),
+            ("field", "description"),
+            ("field", "status"),
+            ("field", "users"),
+            ("blocker_added", ""),
+        ]
+        .map(|(k, f)| (k.to_string(), f.to_string()))
+    );
+    assert_eq!(
+        (&log[3]["from"], &log[3]["to"]),
+        (&json!("TODO"), &json!("IN_PROGRESS"))
+    );
+    assert_eq!(log[2]["to"], json!("changed"));
+    assert!(!log[2].to_string().contains("secret plan"));
+    assert_eq!(log[5]["to"], json!(blocker.id));
+
+    // Edge endpoints and an anonymous edit: logged without an actor.
+    app.call(
+        Method::POST,
+        &format!("/v0/{graph_id}/disconnect_nodes/"),
+        Some(json!({ "node_dependency": blocker.id, "node_dependee": task.id })),
+    )
+    .await;
+    let log = events().await;
+    let last = log.last().unwrap();
+    assert_eq!(
+        (&last["kind"], &last["actor"]),
+        (&json!("blocker_removed"), &Value::Null)
+    );
+
+    // A no-op PUT logs nothing.
+    let before = events().await.len();
+    app.call(Method::PUT, &uri, Some(json!({ "name": "T2" })))
+        .await;
+    assert_eq!(events().await.len(), before);
+
+    // Claim logs status and assignee.
+    let free = app.add_task(&graph_id, json!({ "name": "Free" })).await;
+    app.call_as(
+        Some(&ann_token),
+        Method::POST,
+        &format!("/v0/{graph_id}/task/{}/claim", free.id),
+        None,
+    )
+    .await;
+    let (_, log) = app
+        .call(
+            Method::GET,
+            &format!("/v0/{graph_id}/task/{}/events", free.id),
+            None,
+        )
+        .await;
+    let fields: Vec<&str> = log.as_array().unwrap()[1..]
+        .iter()
+        .map(|e| e["field"].as_str().unwrap())
+        .collect();
+    assert_eq!(fields, ["status", "users"]);
+
+    // Deleting the task deletes its log.
+    app.call(Method::DELETE, &uri, None).await;
+    let mut result = app
+        .graph
+        .query("MATCH (e:Event)-[:ON]->(:Task {id: $id}) RETURN count(e) AS n")
+        .with_param("id", task.id.as_str())
+        .execute()
+        .await
+        .unwrap();
+    let row = futures::StreamExt::next(&mut result.data)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("n").unwrap(), 0);
+    let mut result = app
+        .graph
+        .query("MATCH (e:Event) WHERE NOT (e)-[:ON]->() RETURN count(e) AS n")
+        .execute()
+        .await
+        .unwrap();
+    let row = futures::StreamExt::next(&mut result.data)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("n").unwrap(), 0, "orphaned events");
+
+    app.cleanup().await;
+}
