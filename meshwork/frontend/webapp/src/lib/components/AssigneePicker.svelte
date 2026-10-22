@@ -8,7 +8,9 @@
 		value,
 		onchange,
 		id,
-		small = false
+		small = false,
+		label = 'Assignee',
+		emptyLabel = 'Unassigned'
 	}: {
 		/** Actor ID, '' for unassigned. */
 		value: string;
@@ -16,6 +18,10 @@
 		id?: string;
 		/** Compact height for inline property lists. */
 		small?: boolean;
+		/** Accessible name when there is no visible `<label for={id}>`. */
+		label?: string;
+		/** Text of the "nobody" option. */
+		emptyLabel?: string;
 	} = $props();
 
 	const NEW = '__new__';
@@ -100,11 +106,11 @@
 		{id}
 		bind:this={select}
 		class="field min-w-0 flex-1 {height}"
-		aria-label={id ? undefined : 'Assignee'}
+		aria-label={id ? undefined : label}
 		{value}
 		onchange={pick}
 	>
-		<option value="">Unassigned</option>
+		<option value="">{emptyLabel}</option>
 		{#each graphStore.actors as actor (actor.id)}
 			<option value={actor.id}>{actor.name}{actor.kind === 'agent' ? ' (agent)' : ''}</option>
 		{/each}

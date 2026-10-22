@@ -35,6 +35,9 @@ pub struct Task {
     pub depends_on: Vec<String>,
     /// IDs of the assigned actors (`/v0/actors`).
     pub users: Vec<String>,
+    /// ID of the actor who asked for the task and checks the result.
+    #[serde(default)]
+    pub reporter: Option<String>,
     pub tags: Vec<String>,
     pub status: Status,
     pub priority: Priority,
@@ -63,6 +66,9 @@ pub struct NewTask {
     pub tags: Vec<String>,
     pub priority: Priority,
     pub pr_url: String,
+    /// `None`: the backend makes the caller the reporter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reporter: Option<String>,
 }
 
 /// Fields left as `None` are omitted from the body and so stay unchanged.
@@ -82,6 +88,8 @@ pub struct TaskUpdate {
     pub priority: Option<Priority>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pr_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reporter: Option<String>,
 }
 
 #[cfg(test)]

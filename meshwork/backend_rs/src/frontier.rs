@@ -40,6 +40,7 @@ mod tests {
             description: String::new(),
             depends_on: deps.iter().map(|s| s.to_string()).collect(),
             users: users.iter().map(|s| s.to_string()).collect(),
+            reporter: None,
             tags: vec![],
             status,
             priority: Priority::Normal,

@@ -79,6 +79,7 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Task {id, name, description, status, tags: [string], priority, pr_url})-[:PART_OF]->(:Graph)
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
+(:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
 (:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
 ```
 
@@ -117,6 +118,9 @@ API (`/v0/...`):
   `pr_url` that is neither empty nor `http(s)://…` → 400
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,
   unknown → 404 (validated before any write)
+- Task `reporter` is an actor id or `null`; in requests an id or name. On create it defaults to
+  the token's actor (none without a token); on update `""` removes it. Merging actors moves it,
+  deleting the actor removes it.
 - `GET me` — the actor of the request's token, 401 without one
 - `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
   taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). `Actor` carries

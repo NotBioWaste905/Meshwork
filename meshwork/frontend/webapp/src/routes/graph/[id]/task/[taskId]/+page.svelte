@@ -103,6 +103,11 @@
 		if (task && priority !== task.priority) graphStore.updateTask(task.id, { priority });
 	}
 
+	function setReporter(actorId: string) {
+		if (!task || actorId === (task.reporter ?? '')) return;
+		graphStore.updateTask(task.id, { reporter: actorId });
+	}
+
 	function setAssignee(actorId: string) {
 		if (!task || actorId === (task.users[0] ?? '')) return;
 		graphStore.updateTask(task.id, { users: actorId ? [actorId] : [] });
@@ -370,6 +375,17 @@
 						<dd class="m-0 flex items-center gap-2">
 							{#if task.users[0]}<ActorAvatar id={task.users[0]} size={24} />{/if}
 							<AssigneePicker small value={task.users[0] ?? ''} onchange={setAssignee} />
+						</dd>
+						<dt class="text-muted">Reporter</dt>
+						<dd class="m-0 flex items-center gap-2">
+							{#if task.reporter}<ActorAvatar id={task.reporter} size={24} />{/if}
+							<AssigneePicker
+								small
+								label="Reporter"
+								emptyLabel="Nobody"
+								value={task.reporter ?? ''}
+								onchange={setReporter}
+							/>
 						</dd>
 						<dt class="text-muted">Graph</dt>
 						<dd class="m-0"><a href={base}>{graphStore.name}</a></dd>

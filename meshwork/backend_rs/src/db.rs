@@ -165,6 +165,11 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
             .ok_or_else(|| AppError::Internal(format!("Bad status '{}' in DB", status)))?,
         depends_on: row.try_get("dependencies").map_err(db_err)?,
         users: row.try_get("users").map_err(db_err)?,
+        reporter: row
+            .try_get::<Vec<String>>("reporters")
+            .map_err(db_err)?
+            .into_iter()
+            .next(),
         tags: row
             .try_get::<Option<Vec<String>>>("tags")
             .map_err(db_err)?
@@ -180,11 +185,13 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
 
 const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
      OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:Actor) \
+     OPTIONAL MATCH (t)-[:REPORTED_BY]->(r:Actor) \
      RETURN t.id AS id, t.name AS name, t.description AS description, \
             t.status AS status, t.tags AS tags, \
             t.priority AS priority, t.pr_url AS pr_url, \
             collect(DISTINCT dep.id) AS dependencies, \
-            collect(DISTINCT u.id) AS users \
+            collect(DISTINCT u.id) AS users, \
+            collect(DISTINCT r.id) AS reporters \
      ORDER BY id";
 
 pub async fn get_all_tasks(graph: &mut AsyncGraph, graph_id: &str) -> Result<Vec<Task>> {
@@ -391,6 +398,34 @@ pub async fn set_users(graph: &mut AsyncGraph, task_id: &str, users: &[String]) 
     Ok(())
 }
 
+/// Replaces the task's reporter; `None` removes it. The actor must exist (see
+/// [`resolve_actors`]).
+pub async fn set_reporter(
+    graph: &mut AsyncGraph,
+    task_id: &str,
+    reporter: Option<&str>,
+) -> Result<()> {
+    graph
+        .query("MATCH (t:Task {id: $id})-[r:REPORTED_BY]->() DELETE r")
+        .with_param("id", task_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    if let Some(reporter) = reporter {
+        graph
+            .query(
+                "MATCH (t:Task {id: $id}), (a:Actor {id: $reporter}) \
+                 CREATE (t)-[:REPORTED_BY]->(a)",
+            )
+            .with_param("id", task_id)
+            .with_param("reporter", reporter)
+            .execute()
+            .await
+            .map_err(db_err)?;
+    }
+    Ok(())
+}
+
 pub async fn delete_task(graph: &mut AsyncGraph, task_id: &str) -> Result<()> {
     graph
         .query("MATCH (t:Task {id: $id}) DETACH DELETE t")
@@ -555,7 +590,8 @@ pub async fn update_actor(
     Ok(())
 }
 
-/// Deletes the actor together with its `ASSIGNED_TO` edges and its tokens.
+/// Deletes the actor together with its `ASSIGNED_TO` and `REPORTED_BY` edges (the tasks it
+/// reported are left without a reporter) and its tokens.
 pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> {
     graph
         .query(
@@ -570,15 +606,28 @@ pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Moves the tasks assigned to `from` and its tokens over to `into`, then deletes `from`. A task
-/// assigned to both keeps one edge; a token of the duplicate now acts as `into`. If interrupted between the two queries, `from` is still there and the
-/// merge can simply be repeated.
+/// Moves the tasks assigned to or reported by `from` and its tokens over to `into`, then deletes
+/// `from`. A task assigned to both keeps one edge; a token of the duplicate now acts as `into`.
+/// If interrupted between the queries, `from` is still there and the merge can simply be
+/// repeated.
 pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Result<()> {
     graph
         .query(
             "MATCH (t:Task)-[:ASSIGNED_TO]->(:Actor {id: $from}) \
              MATCH (d:Actor {id: $into}) \
              MERGE (t)-[:ASSIGNED_TO]->(d)",
+        )
+        .with_param("from", from)
+        .with_param("into", into)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    graph
+        .query(
+            "MATCH (t:Task)-[r:REPORTED_BY]->(:Actor {id: $from}) \
+             MATCH (d:Actor {id: $into}) \
+             CREATE (t)-[:REPORTED_BY]->(d) \
+             DELETE r",
         )
         .with_param("from", from)
         .with_param("into", into)

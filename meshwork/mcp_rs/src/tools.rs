@@ -79,6 +79,8 @@ pub struct CreateTaskArgs {
     pub users: Option<Vec<String>>,
     /// LOW, NORMAL (default) or HIGH.
     pub priority: Option<Priority>,
+    /// Actor ID or name of who checks the result. Default: you.
+    pub reporter: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -99,6 +101,8 @@ pub struct UpdateTaskArgs {
     /// URL of the task's pull request (http or https); empty string removes it.
     /// Set it when you open the PR and move the task to REVIEW.
     pub pr_url: Option<String>,
+    /// Actor ID or name of who checks the result; empty string removes it.
+    pub reporter: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -225,6 +229,7 @@ impl Meshwork {
             tags: a.tags.unwrap_or_default(),
             priority: a.priority.unwrap_or_default(),
             pr_url: String::new(),
+            reporter: a.reporter,
         };
         respond(caller.backend.add_task(&a.graph_id, &new).await)
     }
@@ -247,6 +252,7 @@ impl Meshwork {
             status: a.status,
             priority: a.priority,
             pr_url: a.pr_url,
+            reporter: a.reporter,
         };
         respond(
             caller

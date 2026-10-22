@@ -65,6 +65,10 @@ pub struct Task {
     pub depends_on: Vec<String>,
     /// IDs of the assigned actors.
     pub users: Vec<String>,
+    /// ID of the actor who asked for the task and checks the result; by default whoever created
+    /// it. `None` for tasks created without a token and older tasks.
+    #[serde(default)]
+    pub reporter: Option<String>,
     pub tags: Vec<String>,
     pub status: Status,
     pub priority: Priority,
@@ -94,6 +98,9 @@ pub struct NewTask {
     /// An `http(s)` URL or empty.
     #[serde(default)]
     pub pr_url: String,
+    /// Actor ID or name; omitted or empty means the actor of the request's token, if any.
+    #[serde(default)]
+    pub reporter: Option<String>,
 }
 
 /// Request body for editing a task. Omitted fields are left unchanged; list
@@ -111,6 +118,8 @@ pub struct TaskUpdate {
     pub priority: Option<Priority>,
     /// An `http(s)` URL, or empty to remove the link.
     pub pr_url: Option<String>,
+    /// Actor ID or name, or empty to remove the reporter.
+    pub reporter: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

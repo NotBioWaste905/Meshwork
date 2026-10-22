@@ -22,6 +22,8 @@ export type Task = {
 	depends_on: string[];
 	/** IDs of the assigned actors. On input an actor may also be given by name. */
 	users: string[];
+	/** ID of the actor who asked for the task and checks the result; null when nobody. */
+	reporter: string | null;
 	tags: string[];
 	status: Status;
 	priority: Priority;
@@ -33,11 +35,24 @@ export type Task = {
 /** Body for creating a task: the server assigns the ID, the graph comes from the URL. */
 export type NewTask = Pick<Task, 'name'> &
 	Partial<
-		Pick<Task, 'description' | 'depends_on' | 'users' | 'tags' | 'status' | 'priority' | 'pr_url'>
+		Pick<
+			Task,
+			| 'description'
+			| 'depends_on'
+			| 'users'
+			| 'tags'
+			| 'status'
+			| 'priority'
+			| 'pr_url'
+			| 'reporter'
+		>
 	>;
 
 /** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
-export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id'>>;
+export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id' | 'reporter'>> & {
+	/** Actor ID or name; '' removes the reporter. */
+	reporter?: string;
+};
 
 /** Graph metadata with task counters. `name` is the goal; empty for graphs created without one. */
 export type Graph = {
