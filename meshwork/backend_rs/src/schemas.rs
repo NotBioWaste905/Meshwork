@@ -228,6 +228,24 @@ pub struct MergeActors {
     pub into: String,
 }
 
+/// A note an actor left on a task, as returned by the API.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Comment {
+    pub id: String,
+    /// Markdown.
+    pub body: String,
+    /// ID of the actor who wrote it; `None` once that actor was deleted.
+    pub author: Option<String>,
+    /// Milliseconds since the epoch.
+    pub created_at: i64,
+}
+
+/// Request body for adding a comment; the author is the actor of the request's token.
+#[derive(Deserialize, Debug)]
+pub struct NewComment {
+    pub body: String,
+}
+
 /// An API token as listed by the `meshwork-token` CLI. The token itself is never stored, only
 /// its hash, and is never returned after it was issued.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

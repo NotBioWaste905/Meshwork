@@ -25,8 +25,9 @@ pub mod schemas;
 
 use error::{AppError, Result};
 use schemas::{
-    Actor, ActorUpdate, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    MergeActors, MessageResponse, NewActor, NewGraph, NewTask, Status, Task, TaskUpdate,
+    Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
+    MergeActors, MessageResponse, NewActor, NewComment, NewGraph, NewTask, Status, Task,
+    TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -71,6 +72,10 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
             get(get_task).put(edit_task).delete(delete_task),
         )
         .route("/v0/:graph_id/task/:task_id/claim", post(claim_task))
+        .route(
+            "/v0/:graph_id/task/:task_id/comments",
+            get(list_comments).post(add_comment),
+        )
         .route("/v0/:graph_id/connect_nodes/", post(connect_nodes))
         .route("/v0/:graph_id/disconnect_nodes/", post(disconnect_nodes))
         // The last layer added runs first: the connection check, then the token lookup.
@@ -461,6 +466,50 @@ async fn ensure_no_cycle(
         )));
     }
     Ok(())
+}
+
+/// Longest comment accepted, in characters.
+const MAX_COMMENT_CHARS: usize = 20_000;
+
+async fn list_comments(
+    State(state): State<AppState>,
+    Path((graph_id, task_id)): Path<(String, String)>,
+) -> Result<Json<Vec<Comment>>> {
+    let mut graph = state.graph.clone();
+    db::get_task(&mut graph, &graph_id, &task_id).await?;
+    Ok(Json(db::list_comments(&mut graph, &task_id).await?))
+}
+
+/// Adds a comment by the caller: 401 without a token, since a comment's author is an actor.
+async fn add_comment(
+    State(state): State<AppState>,
+    Path((graph_id, task_id)): Path<(String, String)>,
+    Extension(caller): Extension<auth::Caller>,
+    Json(comment): Json<NewComment>,
+) -> Result<(StatusCode, Json<Comment>)> {
+    let author = caller
+        .0
+        .ok_or_else(|| AppError::Unauthorized("Commenting needs a bearer token".to_string()))?;
+    let body = comment.body.trim();
+    if body.is_empty() {
+        return Err(AppError::BadRequest("Comment cannot be empty".to_string()));
+    }
+    if body.chars().count() > MAX_COMMENT_CHARS {
+        return Err(AppError::BadRequest(format!(
+            "Comment is longer than {} characters",
+            MAX_COMMENT_CHARS
+        )));
+    }
+    let mut graph = state.graph.clone();
+    db::get_task(&mut graph, &graph_id, &task_id).await?;
+    let id = Uuid::new_v4().to_string();
+    db::add_comment(&mut graph, &task_id, &id, body, &author.id).await?;
+    let created = db::list_comments(&mut graph, &task_id)
+        .await?
+        .into_iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| AppError::Internal(format!("Comment {} vanished", id)))?;
+    Ok((StatusCode::CREATED, Json(created)))
 }
 
 async fn delete_task(

@@ -83,6 +83,7 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 (:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
 (:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
+(:Comment {id, body, created_at})-[:ON]->(:Task), (:Comment)-[:BY]->(:Actor)  # body is Markdown
 ```
 
 **Auth.** Every `/v0/` request may carry `Authorization: Bearer mw_…`, an actor token; the
@@ -134,6 +135,10 @@ API (`/v0/...`):
   those assignments; `POST actors/:id/merge` with `{into}` (id or name) moves the tasks to `into`
   and deletes the actor, returns `into`. Future references to actors (reporter, tokens,
   created_by) must be moved by merge and handled by delete too.
+- `GET :graph/task/:id/comments` — oldest first: `[{id, body, author, created_at}]`; `POST` with
+  `{body}` (token required, else 401; blank or over 20 000 chars → 400) → 201 `Comment` by the
+  caller. Deleting a task deletes its comments; merging actors moves authorship; deleting an
+  actor keeps its comments with `author: null`.
 - `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
   dependency blocks dependee; on the canvas the edge goes dependency → dependee
 - Errors are `{message}` with 400/401/404/500; 409 when a new dependency would close a

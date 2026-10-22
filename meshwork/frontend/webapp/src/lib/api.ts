@@ -76,6 +76,17 @@ export type Actor = {
 	task_count: number;
 };
 
+/** A note an actor left on a task. */
+export type Comment = {
+	id: string;
+	/** Markdown. */
+	body: string;
+	/** Actor ID of the author; null once that actor was deleted. */
+	author: string | null;
+	/** Milliseconds since the epoch. */
+	created_at: number;
+};
+
 export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export class ApiError extends Error {
@@ -206,6 +217,16 @@ export class MeshworkAPI {
 
 	updateTask(graphId: string, taskId: string, task: TaskUpdate): Promise<Task> {
 		return this.request('PUT', `/v0/${graphId}/task/${taskId}`, task);
+	}
+
+	/** Oldest first. */
+	listComments(graphId: string, taskId: string): Promise<Comment[]> {
+		return this.request('GET', `/v0/${graphId}/task/${taskId}/comments`);
+	}
+
+	/** Signed as the token's actor; 401 when signed out. */
+	addComment(graphId: string, taskId: string, body: string): Promise<Comment> {
+		return this.request('POST', `/v0/${graphId}/task/${taskId}/comments`, { body });
 	}
 
 	deleteTask(graphId: string, taskId: string): Promise<{ message: string }> {

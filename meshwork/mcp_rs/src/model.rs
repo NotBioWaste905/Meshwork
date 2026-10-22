@@ -145,3 +145,15 @@ pub struct Actor {
     /// Tasks assigned to the actor, across all graphs.
     pub task_count: i64,
 }
+
+/// A comment on a task, as the backend returns it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Comment {
+    pub id: String,
+    /// Markdown.
+    pub body: String,
+    /// Actor ID of the author; null once that actor was deleted.
+    pub author: Option<String>,
+    /// Milliseconds since the epoch.
+    pub created_at: i64,
+}
