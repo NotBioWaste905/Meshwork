@@ -398,6 +398,42 @@ pub async fn set_users(graph: &mut AsyncGraph, task_id: &str, users: &[String]) 
     Ok(())
 }
 
+/// Claims the task for `actor_id` in one query, so two claimants cannot both win: it is set
+/// `IN_PROGRESS` and assigned to the actor only if it is `TODO`, every task it depends on is
+/// `DONE` and nobody else is assigned (being assigned already is fine). Returns whether it was
+/// claimed; on `false` nothing changed.
+pub async fn claim_task(
+    graph: &mut AsyncGraph,
+    graph_id: &str,
+    task_id: &str,
+    actor_id: &str,
+) -> Result<bool> {
+    let result = graph
+        .query(
+            "MATCH (t:Task {id: $id})-[:PART_OF]->(:Graph {id: $graph_id}) \
+             WHERE t.status = $todo \
+             OPTIONAL MATCH (t)-[:DEPENDS_ON]->(open:Task) WHERE open.status <> $done \
+             WITH t, count(open) AS open_blockers \
+             OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(other:Actor) WHERE other.id <> $actor \
+             WITH t, open_blockers, count(other) AS others \
+             WHERE open_blockers = 0 AND others = 0 \
+             MATCH (a:Actor {id: $actor}) \
+             SET t.status = $in_progress \
+             MERGE (t)-[:ASSIGNED_TO]->(a) \
+             RETURN count(t) AS n",
+        )
+        .with_param("graph_id", graph_id)
+        .with_param("id", task_id)
+        .with_param("actor", actor_id)
+        .with_param("todo", Status::Todo.as_str())
+        .with_param("done", Status::Done.as_str())
+        .with_param("in_progress", Status::InProgress.as_str())
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(first_count(&collect_rows(result).await?)? > 0)
+}
+
 /// Replaces the task's reporter; `None` removes it. The actor must exist (see
 /// [`resolve_actors`]).
 pub async fn set_reporter(

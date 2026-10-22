@@ -26,7 +26,7 @@ pub mod schemas;
 use error::{AppError, Result};
 use schemas::{
     Actor, ActorUpdate, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    MergeActors, MessageResponse, NewActor, NewGraph, NewTask, Task, TaskUpdate,
+    MergeActors, MessageResponse, NewActor, NewGraph, NewTask, Status, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -70,6 +70,7 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
             "/v0/:graph_id/task/:task_id",
             get(get_task).put(edit_task).delete(delete_task),
         )
+        .route("/v0/:graph_id/task/:task_id/claim", post(claim_task))
         .route("/v0/:graph_id/connect_nodes/", post(connect_nodes))
         .route("/v0/:graph_id/disconnect_nodes/", post(disconnect_nodes))
         // The last layer added runs first: the connection check, then the token lookup.
@@ -402,6 +403,48 @@ fn validate_pr_url(pr_url: &str) -> Result<()> {
             pr_url
         )))
     }
+}
+
+/// Takes a task for the caller: `IN_PROGRESS` and assigned to them, atomically, if it is ready
+/// (`TODO`, every blocker `DONE`) and nobody else has it. 401 without a token, 409 with the reason
+/// when the task cannot be claimed (someone was faster, it is blocked, not `TODO`).
+async fn claim_task(
+    State(state): State<AppState>,
+    Path((graph_id, task_id)): Path<(String, String)>,
+    Extension(caller): Extension<auth::Caller>,
+) -> Result<Json<Task>> {
+    let actor = caller
+        .0
+        .ok_or_else(|| AppError::Unauthorized("Claiming needs a bearer token".to_string()))?;
+    let mut graph = state.graph.clone();
+    if db::claim_task(&mut graph, &graph_id, &task_id, &actor.id).await? {
+        info!("Task '{}' claimed by '{}'", task_id, actor.name);
+        return Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?));
+    }
+    // Not claimed: say why (404 if there is no such task).
+    let task = db::get_task(&mut graph, &graph_id, &task_id).await?;
+    let all = db::get_all_tasks(&mut graph, &graph_id).await?;
+    let open: Vec<&str> = task
+        .depends_on
+        .iter()
+        .filter_map(|id| all.iter().find(|t| &t.id == id))
+        .filter(|t| t.status != Status::Done)
+        .map(|t| t.name.as_str())
+        .collect();
+    let others = task.users.iter().any(|u| u != &actor.id);
+    let reason = if task.status != Status::Todo {
+        format!("it is {}, not TODO", task.status.as_str())
+    } else if others {
+        "someone else is assigned to it".to_string()
+    } else if !open.is_empty() {
+        format!("it is blocked by unfinished tasks: {}", open.join(", "))
+    } else {
+        "it changed meanwhile; try again".to_string()
+    };
+    Err(AppError::Conflict(format!(
+        "Cannot claim task '{}': {}",
+        task.name, reason
+    )))
 }
 
 /// Rejects making `task_id` depend on any of `depends_on` if that would

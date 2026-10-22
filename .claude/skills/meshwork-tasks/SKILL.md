@@ -42,10 +42,10 @@ status in the graph is the truth.
    or accounts (`ops` like cron/launchd, secrets) unless the user asked — propose them instead.
 2. **Read context.** `get_task_context(graph_id, task_id)`: description, blockers' results,
    what it unblocks. Read the relevant code and CLAUDE.md before deciding the approach.
-3. **Take it.** There is no atomic claim yet, so: re-read the task right before taking it; if
-   `users` is non-empty or status is not `TODO`, pick another. Then
-   `update_task(status: IN_PROGRESS, users: ["claude"])`. When dispatching subagents, each takes
-   its own task this way; never give two agents the same task.
+3. **Take it.** `claim_task(graph_id, task_id)`: assigns you and sets `IN_PROGRESS` in one
+   atomic step, only if the task is ready and nobody else has it. If it fails, someone was faster
+   or the task is not ready: pick another. When dispatching subagents, each claims its own task
+   this way; two agents can never both win the same one.
 4. **Work.** Branch from `origin/dev` (`feat/…`, `fix/…`, `docs/…`, `ci/…`, `chore/…`), in a
    worktree if other work is going on in the main checkout. Follow CLAUDE.md: tests, fmt,
    clippy `-D warnings`, `npm run check` / `lint` / `build` for the parts you touched.
