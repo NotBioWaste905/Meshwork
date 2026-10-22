@@ -11,7 +11,8 @@ use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
 use crate::schemas::{
-    Actor, ActorKind, Comment, GraphInfo, NewTask, Priority, Status, Task, TaskUpdate, TokenInfo,
+    Actor, ActorKind, Comment, GraphInfo, NewTask, Position, Priority, Status, Task, TaskUpdate,
+    TokenInfo,
 };
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
@@ -207,6 +208,13 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
             .map_err(db_err)?
             .into_iter()
             .next(),
+        position: match (
+            row.try_get::<Option<f64>>("x").map_err(db_err)?,
+            row.try_get::<Option<f64>>("y").map_err(db_err)?,
+        ) {
+            (Some(x), Some(y)) => Some(Position { x, y }),
+            _ => None,
+        },
         graph_id: graph_id.to_string(),
     })
 }
@@ -219,6 +227,7 @@ const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
             t.status AS status, t.tags AS tags, \
             t.priority AS priority, t.pr_url AS pr_url, \
             t.created_at AS created_at, t.updated_at AS updated_at, \
+            t.x AS x, t.y AS y, \
             collect(DISTINCT cb.id) AS creators, \
             collect(DISTINCT dep.id) AS dependencies, \
             collect(DISTINCT u.id) AS users, \
@@ -502,6 +511,35 @@ impl Created {
             Created::Task => "Task",
         }
     }
+}
+
+/// Stores canvas positions of tasks of the graph, all in one query. Not a change to the tasks:
+/// `updated_at` stays. The caller has checked that the tasks are in the graph.
+pub async fn save_positions(
+    graph: &mut AsyncGraph,
+    graph_id: &str,
+    positions: &[(String, Position)],
+) -> Result<()> {
+    if positions.is_empty() {
+        return Ok(());
+    }
+    let ids: Vec<String> = positions.iter().map(|(id, _)| id.clone()).collect();
+    let xs: Vec<f64> = positions.iter().map(|(_, p)| p.x).collect();
+    let ys: Vec<f64> = positions.iter().map(|(_, p)| p.y).collect();
+    graph
+        .query(
+            "UNWIND range(0, size($ids) - 1) AS i \
+             MATCH (t:Task {id: $ids[i]})-[:PART_OF]->(:Graph {id: $graph_id}) \
+             SET t.x = $xs[i], t.y = $ys[i]",
+        )
+        .with_param("graph_id", graph_id)
+        .with_param("ids", ids)
+        .with_param("xs", xs)
+        .with_param("ys", ys)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
 }
 
 /// Marks the task as changed now.

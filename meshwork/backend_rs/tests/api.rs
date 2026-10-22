@@ -1706,3 +1706,77 @@ async fn timestamps_and_creators() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn layout_positions_persist() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let a = app.add_task(&graph_id, json!({ "name": "A" })).await;
+    let b = app.add_task(&graph_id, json!({ "name": "B" })).await;
+    assert_eq!(a.position, None);
+    let layout = format!("/v0/{graph_id}/layout");
+    let position_of = |tasks: &[Task], id: &str| {
+        tasks
+            .iter()
+            .find(|t| t.id == id)
+            .unwrap()
+            .position
+            .map(|p| (p.x, p.y))
+    };
+
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &layout,
+            Some(json!({ "positions": {
+                (a.id.clone()): { "x": 10.5, "y": -20 },
+                (b.id.clone()): { "x": 300, "y": 40 },
+            } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let tasks = app.all_tasks(&graph_id).await;
+    assert_eq!(position_of(&tasks, &a.id), Some((10.5, -20.0)));
+    assert_eq!(position_of(&tasks, &b.id), Some((300.0, 40.0)));
+    // Layout is not a change to the task.
+    assert_eq!(
+        tasks.iter().find(|t| t.id == a.id).unwrap().updated_at,
+        a.updated_at
+    );
+
+    // Partial: only B moves.
+    app.call(
+        Method::PUT,
+        &layout,
+        Some(json!({ "positions": { (b.id.clone()): { "x": 0, "y": 0 } } })),
+    )
+    .await;
+    let tasks = app.all_tasks(&graph_id).await;
+    assert_eq!(position_of(&tasks, &a.id), Some((10.5, -20.0)));
+    assert_eq!(position_of(&tasks, &b.id), Some((0.0, 0.0)));
+
+    // A task of another graph: 404 and nothing saved.
+    let other = app.create_graph().await;
+    let stranger = app.add_task(&other, json!({ "name": "S" })).await;
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &layout,
+            Some(json!({ "positions": {
+                (a.id.clone()): { "x": 1, "y": 1 },
+                (stranger.id.clone()): { "x": 1, "y": 1 },
+            } })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let tasks = app.all_tasks(&graph_id).await;
+    assert_eq!(position_of(&tasks, &a.id), Some((10.5, -20.0)));
+
+    let (status, _) = app
+        .call(Method::PUT, &layout, Some(json!({ "positions": {} })))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    app.cleanup().await;
+}

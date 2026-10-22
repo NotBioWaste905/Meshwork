@@ -116,6 +116,18 @@ class GraphStore {
 		return describeRelations(task, this.tasks);
 	}
 
+	/** Saves where nodes sit on the canvas, so the layout survives reloads and other browsers. */
+	async saveLayout(positions: Iterable<[string, { x: number; y: number }]>) {
+		const body = Object.fromEntries(positions);
+		if (Object.keys(body).length === 0) return;
+		try {
+			await api.saveLayout(this.graphId, body);
+		} catch (error) {
+			// the canvas still shows the new layout; it is just not saved
+			console.warn('Cannot save the layout:', error);
+		}
+	}
+
 	/**
 	 * Pauses background refresh until the returned function is called. Use it around in-progress
 	 * edits, e.g. `$effect(() => { if (editing) return graphStore.hold(); })`.

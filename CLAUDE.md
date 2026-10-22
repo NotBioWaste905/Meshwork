@@ -78,7 +78,7 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 
 ```
 (:Graph {id, name, created_at, updated_at})  # name is the goal, "" for unnamed/older graphs
-(:Task {id, name, description, status, tags: [string], priority, pr_url, created_at, updated_at})-[:PART_OF]->(:Graph)
+(:Task {id, name, description, status, tags: [string], priority, pr_url, created_at, updated_at, x, y})-[:PART_OF]->(:Graph)
 (:Task|:Graph)-[:CREATED_BY]->(:Actor)  # the token's actor at creation; none without a token
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
@@ -149,6 +149,10 @@ API (`/v0/...`):
   `{body}` (token required, else 401; blank or over 20 000 chars → 400) → 201 `Comment` by the
   caller. Deleting a task deletes its comments; merging actors moves authorship; deleting an
   actor keeps its comments with `author: null`.
+- `PUT :graph/layout` with `{positions: {<task id>: {x, y}}}` — saves canvas positions (returned
+  as `Task.position`, `null` until placed) in one query; a task outside the graph → 404 and
+  nothing saved. Not a task change: `updated_at` stays. The canvas saves the whole layout on
+  every drag, placement and auto-layout.
 - `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
   dependency blocks dependee; on the canvas the edge goes dependency → dependee
 - Errors are `{message}` with 400/401/404/500; 409 when a new dependency would close a

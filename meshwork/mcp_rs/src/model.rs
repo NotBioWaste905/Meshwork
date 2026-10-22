@@ -52,6 +52,9 @@ pub struct Task {
     /// Actor ID of whoever created the task, if known.
     #[serde(default)]
     pub created_by: Option<String>,
+    /// Canvas position, `{x, y}`. Read for completeness, not passed on: agents have no use for it.
+    #[serde(default, skip_serializing)]
+    pub position: Option<serde_json::Value>,
     pub graph_id: String,
 }
 
