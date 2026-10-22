@@ -1,15 +1,18 @@
 //! Thin REST client for the Meshwork backend (`/v0/...`).
 
-use reqwest::{Client, Method, RequestBuilder};
+use reqwest::{Client, Method, RequestBuilder, StatusCode};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 
-use crate::model::{GraphInfo, NewTask, Task, TaskUpdate};
+use crate::model::{Actor, GraphInfo, NewTask, Task, TaskUpdate};
 
+/// A backend client. [`Backend::new`] makes anonymous requests; [`Backend::with_token`] gives a
+/// client that acts as the token's actor.
 #[derive(Clone)]
 pub struct Backend {
     client: Client,
     base: String,
+    token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -23,17 +26,61 @@ struct CreatedGraph {
     id: String,
 }
 
+/// Decodes a backend response; `{message}` errors become the `Err` text.
+async fn decode<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, String> {
+    let status = resp.status();
+    if status.is_success() {
+        return resp
+            .json()
+            .await
+            .map_err(|e| format!("bad backend response: {e}"));
+    }
+    let text = resp.text().await.unwrap_or_default();
+    let message = serde_json::from_str::<ErrorBody>(&text)
+        .map(|b| b.message)
+        .unwrap_or(text);
+    Err(format!("{status}: {message}"))
+}
+
 impl Backend {
     pub fn new(base: &str) -> Self {
         Self {
             client: Client::new(),
             base: base.trim_end_matches('/').to_string(),
+            token: None,
+        }
+    }
+
+    /// The same backend, sending `token` as the bearer token of every request.
+    pub fn with_token(&self, token: &str) -> Self {
+        Self {
+            token: Some(token.to_string()),
+            ..self.clone()
         }
     }
 
     fn req(&self, method: Method, path: &str) -> RequestBuilder {
-        self.client
-            .request(method, format!("{}/v0/{}", self.base, path))
+        let req = self
+            .client
+            .request(method, format!("{}/v0/{}", self.base, path));
+        match &self.token {
+            Some(token) => req.bearer_auth(token),
+            None => req,
+        }
+    }
+
+    /// The actor of this client's token: `Ok(None)` when the backend rejects the token (or there
+    /// is none), `Err` when the backend cannot answer.
+    pub async fn me(&self) -> Result<Option<Actor>, String> {
+        let resp = self
+            .req(Method::GET, "me")
+            .send()
+            .await
+            .map_err(|e| format!("backend unreachable: {e}"))?;
+        if resp.status() == StatusCode::UNAUTHORIZED {
+            return Ok(None);
+        }
+        decode(resp).await.map(Some)
     }
 
     /// Sends the request and decodes the body; backend `{message}` errors become the `Err` text.
@@ -42,18 +89,7 @@ impl Backend {
             .send()
             .await
             .map_err(|e| format!("backend unreachable: {e}"))?;
-        let status = resp.status();
-        if status.is_success() {
-            return resp
-                .json()
-                .await
-                .map_err(|e| format!("bad backend response: {e}"));
-        }
-        let text = resp.text().await.unwrap_or_default();
-        let message = serde_json::from_str::<ErrorBody>(&text)
-            .map(|b| b.message)
-            .unwrap_or(text);
-        Err(format!("{status}: {message}"))
+        decode(resp).await
     }
 
     pub async fn create_graph(&self, name: &str) -> Result<String, String> {

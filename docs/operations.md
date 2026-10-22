@@ -1,4 +1,4 @@
-# Эксплуатация: данные FalkorDB
+# Эксплуатация: данные FalkorDB и токены
 
 FalkorDB — модуль Redis: весь граф живёт в памяти, на диск его пишет Redis.
 Данные лежат в docker-томе `meshwork_falkordb_data`
@@ -59,3 +59,25 @@ docker compose up -d falkordb backend
 `INFO persistence`), и только потом запускать с AOF в конфиге. Самый простой
 способ для существующего тома — сделать бэкап и сразу восстановить его тем же
 скриптом.
+
+## Токены актёров
+
+Каждый запрос к API и MCP может идти от актёра: заголовок `Authorization: Bearer mw_…`.
+MCP без токена не пускает; бэкенд пока обслуживает и анонимные запросы, но неизвестный токен —
+401. Токены выдаёт только CLI `meshwork-token` в контейнере бэкенда (по HTTP их получить нельзя,
+экрана логина нет). В базе хранится лишь SHA-256 токена: потерянный токен не восстановить —
+выпустите новый и отзовите старый.
+
+```bash
+# выпустить токен актёру (id или имя; актёр должен существовать — экран Actors в UI)
+docker compose exec -T backend meshwork-token create claude --label "claude, ноутбук"
+# список токенов (id, актёр, создан, метка) — сами токены не показываются
+docker compose exec -T backend meshwork-token list [claude]
+# отозвать по id из списка
+docker compose exec -T backend meshwork-token revoke <token-id>
+```
+
+`create` печатает в stdout только токен, поэтому его можно сразу положить в переменную:
+`export MESHWORK_MCP_TOKEN=$(docker compose exec -T backend meshwork-token create claude)` —
+её читает `.mcp.json` для Claude Code. Слияние актёров переносит их токены, удаление актёра
+удаляет и токены.

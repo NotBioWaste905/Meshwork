@@ -26,6 +26,8 @@ RUN apt-get update \
 
 RUN useradd --system --no-create-home meshwork
 COPY --from=build /app/target/release/backend_rs /usr/local/bin/backend_rs
+# Issues actor API tokens: docker compose exec backend meshwork-token create <actor>
+COPY --from=build /app/target/release/meshwork-token /usr/local/bin/meshwork-token
 
 USER meshwork
 EXPOSE 8000

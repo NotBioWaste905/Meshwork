@@ -76,3 +76,14 @@ mod tests {
         assert_eq!(graphs[0].task_count, 3);
     }
 }
+
+/// An actor as the backend returns it (`GET /v0/me`, `/v0/actors`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Actor {
+    pub id: String,
+    pub name: String,
+    /// `human` or `agent`.
+    pub kind: String,
+    /// Tasks assigned to the actor, across all graphs.
+    pub task_count: i64,
+}

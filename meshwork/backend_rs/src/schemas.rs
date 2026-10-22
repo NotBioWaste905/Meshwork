@@ -182,3 +182,16 @@ pub struct MergeActors {
     /// The actor that stays, by ID or by name.
     pub into: String,
 }
+
+/// An API token as listed by the `meshwork-token` CLI. The token itself is never stored, only
+/// its hash, and is never returned after it was issued.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TokenInfo {
+    pub id: String,
+    /// What the token is for, e.g. "claude on the laptop"; may be empty.
+    pub label: String,
+    /// Milliseconds since the epoch.
+    pub created_at: i64,
+    pub actor_id: String,
+    pub actor_name: String,
+}

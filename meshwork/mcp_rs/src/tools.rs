@@ -12,19 +12,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
-    backend::Backend,
+    auth::Caller,
     graph,
     model::{NewTask, Status, Task, TaskUpdate},
 };
 
-#[derive(Clone)]
-pub struct Meshwork {
-    backend: Backend,
-}
+/// The tools. Stateless: every call acts through its [`Caller`], the backend client of the
+/// token that made the request.
+#[derive(Clone, Default)]
+pub struct Meshwork;
 
 impl Meshwork {
-    pub fn new(backend: Backend) -> Self {
-        Self { backend }
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -107,12 +107,21 @@ pub struct LinkArgs {
 #[tool_router]
 impl Meshwork {
     #[tool(
+        description = "Return the actor you act as (from your bearer token): its id and name. \
+                       Put that id in `users` when you take a task.",
+        annotations(read_only_hint = true)
+    )]
+    async fn whoami(&self, caller: Caller) -> Result<CallToolResult, ErrorData> {
+        respond(Ok::<_, String>(caller.actor))
+    }
+
+    #[tool(
         description = "List all graphs (projects) with their names and task counts, newest first. \
                        Call this first to find the graph_id of the project you work on.",
         annotations(read_only_hint = true)
     )]
-    async fn list_graphs(&self) -> Result<CallToolResult, ErrorData> {
-        respond(self.backend.list_graphs().await)
+    async fn list_graphs(&self, caller: Caller) -> Result<CallToolResult, ErrorData> {
+        respond(caller.backend.list_graphs().await)
     }
 
     #[tool(
@@ -121,10 +130,12 @@ impl Meshwork {
     )]
     async fn create_graph(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<CreateGraphArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         respond(
-            self.backend
+            caller
+                .backend
                 .create_graph(a.name.as_deref().unwrap_or_default())
                 .await
                 .map(|id| json!({ "graph_id": id })),
@@ -137,9 +148,10 @@ impl Meshwork {
     )]
     async fn list_tasks(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<GraphArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        respond(self.backend.all_tasks(&a.graph_id).await)
+        respond(caller.backend.all_tasks(&a.graph_id).await)
     }
 
     #[tool(
@@ -149,9 +161,10 @@ impl Meshwork {
     )]
     async fn list_ready_tasks(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<ReadyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let res = self.backend.all_tasks(&a.graph_id).await.map(|tasks| {
+        let res = caller.backend.all_tasks(&a.graph_id).await.map(|tasks| {
             graph::ready_tasks(&tasks, a.unassigned_only.unwrap_or(true))
                 .into_iter()
                 .cloned()
@@ -166,10 +179,11 @@ impl Meshwork {
     )]
     async fn get_task_context(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<TaskArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let res = async {
-            let tasks = self.backend.all_tasks(&a.graph_id).await?;
+            let tasks = caller.backend.all_tasks(&a.graph_id).await?;
             let task = tasks.iter().find(|t| t.id == a.task_id).ok_or_else(|| {
                 format!("404: task {} not found in graph {}", a.task_id, a.graph_id)
             })?;
@@ -193,6 +207,7 @@ impl Meshwork {
     )]
     async fn create_task(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<CreateTaskArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let new = NewTask {
@@ -202,7 +217,7 @@ impl Meshwork {
             users: a.users.unwrap_or_default(),
             tags: a.tags.unwrap_or_default(),
         };
-        respond(self.backend.add_task(&a.graph_id, &new).await)
+        respond(caller.backend.add_task(&a.graph_id, &new).await)
     }
 
     #[tool(
@@ -212,6 +227,7 @@ impl Meshwork {
     )]
     async fn update_task(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<UpdateTaskArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let update = TaskUpdate {
@@ -222,7 +238,8 @@ impl Meshwork {
             status: a.status,
         };
         respond(
-            self.backend
+            caller
+                .backend
                 .update_task(&a.graph_id, &a.task_id, &update)
                 .await,
         )
@@ -235,9 +252,10 @@ impl Meshwork {
     )]
     async fn link_tasks(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<LinkArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let res = self
+        let res = caller
             .backend
             .connect(&a.graph_id, &a.blocker_id, &a.blocked_id)
             .await
@@ -251,9 +269,10 @@ impl Meshwork {
     )]
     async fn unlink_tasks(
         &self,
+        caller: Caller,
         Parameters(a): Parameters<LinkArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let res = self
+        let res = caller
             .backend
             .disconnect(&a.graph_id, &a.blocker_id, &a.blocked_id)
             .await
@@ -265,7 +284,7 @@ impl Meshwork {
 #[tool_handler(
     name = "meshwork",
     instructions = "Meshwork is a task tracker where tasks are graph nodes and dependencies are explicit. \
-                    Call list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
+                    Call whoami to learn your actor id, list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
                     update_task to move status, and link_tasks to record new dependencies."
 )]
 impl ServerHandler for Meshwork {}

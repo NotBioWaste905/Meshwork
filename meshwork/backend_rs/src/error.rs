@@ -1,5 +1,5 @@
 use axum::{
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -13,6 +13,7 @@ pub enum AppError {
     NotFound(String),
     BadRequest(String),
     Conflict(String),
+    Unauthorized(String),
     Internal(String),
 }
 
@@ -37,6 +38,15 @@ impl IntoResponse for AppError {
             AppError::Conflict(msg) => {
                 warn!("Conflict: {}", msg);
                 (StatusCode::CONFLICT, msg)
+            }
+            AppError::Unauthorized(msg) => {
+                warn!("Unauthorized: {}", msg);
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    [(header::WWW_AUTHENTICATE, "Bearer")],
+                    Json(MessageResponse { message: msg }),
+                )
+                    .into_response();
             }
             AppError::Internal(msg) => {
                 error!("Internal error: {}", msg);

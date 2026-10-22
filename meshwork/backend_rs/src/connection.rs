@@ -85,6 +85,8 @@ pub async fn ensure_indexes(graph: &mut AsyncGraph) -> Result<()> {
         ("Graph.id", "CREATE INDEX FOR (g:Graph) ON (g.id)"),
         ("Actor.id", "CREATE INDEX FOR (a:Actor) ON (a.id)"),
         ("Actor.name", "CREATE INDEX FOR (a:Actor) ON (a.name)"),
+        ("Token.hash", "CREATE INDEX FOR (k:Token) ON (k.hash)"),
+        ("Token.id", "CREATE INDEX FOR (k:Token) ON (k.id)"),
     ] {
         match graph.query(q).execute().await {
             Ok(_) => info!("Created index on {}", field),
