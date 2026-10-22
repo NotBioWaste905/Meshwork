@@ -77,8 +77,9 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 ## Data model (as in code)
 
 ```
-(:Graph {id, name, created_at})     # name is the goal, "" for unnamed/older graphs
-(:Task {id, name, description, status, tags: [string], priority, pr_url})-[:PART_OF]->(:Graph)
+(:Graph {id, name, created_at, updated_at})  # name is the goal, "" for unnamed/older graphs
+(:Task {id, name, description, status, tags: [string], priority, pr_url, created_at, updated_at})-[:PART_OF]->(:Graph)
+(:Task|:Graph)-[:CREATED_BY]->(:Actor)  # the token's actor at creation; none without a token
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 (:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
@@ -113,7 +114,11 @@ read as `NORMAL` and `""`.
 API (`/v0/...`):
 - `POST create_graph` — optional body `{name}` (no body / empty body = unnamed graph);
   returns `{ID, name}`
-- `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count}]`
+- `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count,
+  created_at, updated_at, created_by}]`; a graph's `updated_at` is the latest of its own
+  (rename, task deleted) and its tasks'. Timestamps are ms since the epoch, `null` on older data.
+  Tasks carry `created_at`, `updated_at` (set by create, PUT, claim, and edge changes on the
+  dependee) and `created_by`.
 - `GET :graph` — one graph in the same shape; `PUT :graph` with `{name}` renames (blank → 400)
 - `GET :graph/all_tasks`
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`,

@@ -74,6 +74,16 @@ pub struct Task {
     pub priority: Priority,
     /// Link to the pull request doing the task; empty when there is none.
     pub pr_url: String,
+    /// Milliseconds since the epoch; `None` for tasks created before this was recorded.
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    /// Last change to the task's fields, status, edges or assignees; `None` like `created_at`.
+    #[serde(default)]
+    pub updated_at: Option<i64>,
+    /// ID of the actor whose token created the task; `None` without a token, for older tasks
+    /// and once that actor was deleted.
+    #[serde(default)]
+    pub created_by: Option<String>,
     pub graph_id: String,
 }
 
@@ -160,6 +170,15 @@ pub struct GraphInfo {
     pub task_count: i64,
     pub done_count: i64,
     pub blocked_count: i64,
+    /// Milliseconds since the epoch; `None` for the oldest graphs.
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    /// Latest change to the graph or any of its tasks.
+    #[serde(default)]
+    pub updated_at: Option<i64>,
+    /// ID of the actor whose token created the graph, as for tasks.
+    #[serde(default)]
+    pub created_by: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

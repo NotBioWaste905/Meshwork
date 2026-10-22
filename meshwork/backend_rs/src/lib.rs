@@ -106,6 +106,7 @@ async fn health() -> Json<serde_json::Value> {
 /// clients written before graphs had names keep working.
 async fn create_graph(
     State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
     body: Bytes,
 ) -> Result<Json<CreateGraphResponse>> {
     let new_graph: NewGraph = if body.iter().all(u8::is_ascii_whitespace) {
@@ -119,6 +120,9 @@ async fn create_graph(
     info!("Creating new graph with ID: {}", id);
     let mut graph = state.graph.clone();
     db::create_graph(&mut graph, &id, &name).await?;
+    if let Some(actor) = &caller.0 {
+        db::set_created_by(&mut graph, db::Created::Graph, &id, &actor.id).await?;
+    }
     Ok(Json(CreateGraphResponse { id, name }))
 }
 
@@ -372,7 +376,7 @@ async fn add_task(
     // The author reports the task unless someone else is named.
     let reporter = match task.reporter.as_deref().filter(|r| !r.is_empty()) {
         Some(r) => Some(resolve_actor(&mut graph, r).await?),
-        None => caller.0.map(|actor| actor.id),
+        None => caller.0.as_ref().map(|actor| actor.id.clone()),
     };
 
     let id = Uuid::new_v4().to_string();
@@ -381,6 +385,9 @@ async fn add_task(
     db::set_dependencies(&mut graph, &id, &task.depends_on).await?;
     db::set_users(&mut graph, &id, &users).await?;
     db::set_reporter(&mut graph, &id, reporter.as_deref()).await?;
+    if let Some(actor) = &caller.0 {
+        db::set_created_by(&mut graph, db::Created::Task, &id, &actor.id).await?;
+    }
 
     let created = db::get_task(&mut graph, &graph_id, &id).await?;
     Ok((StatusCode::CREATED, Json(created)))
@@ -468,6 +475,7 @@ async fn edit_task(
     if let Some(reporter) = &reporter {
         db::set_reporter(&mut graph, &task_id, reporter.as_deref()).await?;
     }
+    db::touch_task(&mut graph, &task_id).await?;
 
     Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
 }
@@ -602,6 +610,7 @@ async fn delete_task(
     let mut graph = state.graph.clone();
     db::get_task(&mut graph, &graph_id, &task_id).await?;
     db::delete_task(&mut graph, &task_id).await?;
+    db::touch_graph(&mut graph, &graph_id).await?;
     Ok(Json(MessageResponse {
         message: format!("Task {} deleted", task_id),
     }))
@@ -640,6 +649,7 @@ async fn connect_nodes(
     )
     .await?;
     db::connect(&mut graph, &request.node_dependee, &request.node_dependency).await?;
+    db::touch_task(&mut graph, &request.node_dependee).await?;
     Ok(Json(MessageResponse {
         message: format!(
             "Nodes {} and {} connected",
@@ -674,6 +684,7 @@ async fn disconnect_nodes(
             request.node_dependee, request.node_dependency
         )));
     }
+    db::touch_task(&mut graph, &request.node_dependee).await?;
     Ok(Json(MessageResponse {
         message: format!(
             "Nodes {} and {} disconnected",

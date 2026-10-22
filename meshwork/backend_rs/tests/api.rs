@@ -691,13 +691,20 @@ async fn graph_metadata_and_listing() {
 
     let (status, body) = app.call(Method::GET, &format!("/v0/{named}"), None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    let counts = |b: &Value| {
+        json!({
+            "id": b["id"], "name": b["name"], "task_count": b["task_count"],
+            "done_count": b["done_count"], "blocked_count": b["blocked_count"]
+        })
+    };
     assert_eq!(
-        body,
+        counts(&body),
         json!({
             "id": named, "name": "Ship billing",
             "task_count": 3, "done_count": 1, "blocked_count": 1
         })
     );
+    assert!(body["updated_at"].as_i64() >= body["created_at"].as_i64());
 
     let (status, body) = app.call(Method::GET, "/v0/graphs", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1562,6 +1569,140 @@ async fn own_tokens_self_service() {
         .await;
     assert_eq!(body.as_array().unwrap().len(), 1);
     assert_eq!(body[0]["current"], true);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn timestamps_and_creators() {
+    let mut app = TestApp::new().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+    let pause = || tokio::time::sleep(std::time::Duration::from_millis(5));
+
+    // Created with a token: the creator is recorded, on the graph and on the task.
+    let (status, body) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "G" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let graph_id = body["ID"].as_str().unwrap().to_string();
+    let (status, body) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &format!("/v0/{graph_id}/task/add/"),
+            Some(json!({ "name": "A" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let a: Task = serde_json::from_value(body).unwrap();
+    assert_eq!(a.created_by.as_deref(), Some(ann.id.as_str()));
+    let created = a.created_at.unwrap();
+    assert_eq!(a.updated_at, Some(created));
+    let (_, g) = app
+        .call(Method::GET, &format!("/v0/{graph_id}"), None)
+        .await;
+    assert_eq!(g["created_by"], json!(ann.id));
+
+    // Without a token: no creator.
+    let b = app.add_task(&graph_id, json!({ "name": "B" })).await;
+    assert_eq!(b.created_by, None);
+    assert!(b.created_at.is_some());
+
+    // Edits, claims and edge changes move updated_at; created_at stays.
+    let get = |id: String| {
+        let app = &app;
+        let uri = format!("/v0/{graph_id}/task/{id}");
+        async move {
+            let (_, body) = app.call(Method::GET, &uri, None).await;
+            serde_json::from_value::<Task>(body).unwrap()
+        }
+    };
+    pause().await;
+    app.call(
+        Method::PUT,
+        &format!("/v0/{graph_id}/task/{}", a.id),
+        Some(json!({ "name": "A2" })),
+    )
+    .await;
+    let edited = get(a.id.clone()).await;
+    assert_eq!(edited.created_at, Some(created));
+    assert!(edited.updated_at.unwrap() > created);
+
+    pause().await;
+    app.call(
+        Method::POST,
+        &format!("/v0/{graph_id}/connect_nodes/"),
+        Some(json!({ "node_dependency": a.id, "node_dependee": b.id })),
+    )
+    .await;
+    let linked = get(b.id.clone()).await;
+    assert!(linked.updated_at > b.updated_at);
+
+    pause().await;
+    app.call_as(
+        Some(&ann_token),
+        Method::POST,
+        &format!("/v0/{graph_id}/task/{}/claim", a.id),
+        None,
+    )
+    .await;
+    let claimed = get(a.id.clone()).await;
+    assert!(claimed.updated_at > edited.updated_at);
+
+    // The graph's updated_at follows its latest task change, and deletions.
+    let (_, g) = app
+        .call(Method::GET, &format!("/v0/{graph_id}"), None)
+        .await;
+    assert_eq!(g["updated_at"].as_i64(), claimed.updated_at);
+    pause().await;
+    app.call(
+        Method::DELETE,
+        &format!("/v0/{graph_id}/task/{}", b.id),
+        None,
+    )
+    .await;
+    let (_, g) = app
+        .call(Method::GET, &format!("/v0/{graph_id}"), None)
+        .await;
+    assert!(g["updated_at"].as_i64() > claimed.updated_at);
+
+    // Merging moves what the actor created; deleting leaves it without a creator.
+    app.call(
+        Method::POST,
+        &format!("/v0/actors/{}/merge", ann.id),
+        Some(json!({ "into": "bob" })),
+    )
+    .await;
+    let bob_id = app
+        .call(Method::GET, "/v0/actors", None)
+        .await
+        .1
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["name"] == "bob")
+        .unwrap()["id"]
+        .clone();
+    assert_eq!(json!(get(a.id.clone()).await.created_by), bob_id);
+    let (_, g) = app
+        .call(Method::GET, &format!("/v0/{graph_id}"), None)
+        .await;
+    assert_eq!(g["created_by"], bob_id);
+    app.call(
+        Method::DELETE,
+        &format!("/v0/actors/{}?unassign=true", bob_id.as_str().unwrap()),
+        None,
+    )
+    .await;
+    assert_eq!(get(a.id.clone()).await.created_by, None);
 
     app.cleanup().await;
 }
