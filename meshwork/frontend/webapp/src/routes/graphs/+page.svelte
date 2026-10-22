@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Graph } from '$lib/api';
+	import { liveRefresh, mergeById } from '$lib/liveRefresh';
 
 	const COLORS = ['#2349C7', '#0F766E', '#7A3FC4', '#B4530A'];
 
@@ -16,13 +17,26 @@
 		graphs.filter((g) => title(g).toLowerCase().includes(query.trim().toLowerCase()))
 	);
 
-	onMount(async () => {
+	async function load() {
 		try {
-			graphs = await api.listGraphs();
+			// unchanged graphs keep their objects, so a quiet poll re-renders nothing
+			graphs = mergeById(graphs, await api.listGraphs());
+			error = '';
 		} catch (e) {
-			error = `Failed to load graphs: ${e instanceof Error ? e.message : e}`;
+			// a failed background poll keeps showing the list it has
+			if (loading || graphs.length === 0) {
+				error = `Failed to load graphs: ${e instanceof Error ? e.message : e}`;
+			} else {
+				console.warn('Background refresh failed:', e);
+			}
 		}
 		loading = false;
+	}
+
+	// Agents create graphs and move tasks too: poll while visible, refresh on return to the tab.
+	onMount(() => {
+		load();
+		return liveRefresh(load);
 	});
 
 	const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
