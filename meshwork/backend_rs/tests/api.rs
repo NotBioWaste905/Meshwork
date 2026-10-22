@@ -1184,6 +1184,114 @@ async fn task_reporter() {
 
 #[tokio::test]
 #[ignore = "needs FalkorDB"]
+async fn claim_task_is_atomic() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+    let (bob_token, _, _) = auth::issue_token(&mut app.graph, "bob", "").await.unwrap();
+    let blocker = app.add_task(&graph_id, json!({ "name": "Blocker" })).await;
+    let blocked = app
+        .add_task(
+            &graph_id,
+            json!({ "name": "Blocked", "depends_on": [blocker.id] }),
+        )
+        .await;
+    let claim = |id: &str| format!("/v0/{graph_id}/task/{id}/claim");
+
+    // Without a token there is nobody to assign.
+    let (status, _) = app.call(Method::POST, &claim(&blocker.id), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Ready and free: ann gets it; bob is too late, and so is ann a second time.
+    let (status, body) = app
+        .call_as(Some(&ann_token), Method::POST, &claim(&blocker.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["status"], "IN_PROGRESS");
+    assert_eq!(body["users"], json!([ann.id]));
+    let (status, body) = app
+        .call_as(Some(&bob_token), Method::POST, &claim(&blocker.id), None)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["message"].as_str().unwrap().contains("not TODO"),
+        "{body}"
+    );
+
+    // Blocked by an unfinished task.
+    let (status, body) = app
+        .call_as(Some(&bob_token), Method::POST, &claim(&blocked.id), None)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["message"].as_str().unwrap().contains("Blocker"),
+        "{body}"
+    );
+
+    // Assigned to someone else, though TODO and ready.
+    let theirs = app
+        .add_task(&graph_id, json!({ "name": "Theirs", "users": ["bob"] }))
+        .await;
+    let (status, body) = app
+        .call_as(Some(&ann_token), Method::POST, &claim(&theirs.id), None)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["message"].as_str().unwrap().contains("someone else"),
+        "{body}"
+    );
+    // ...but its own assignee may claim it.
+    let (status, body) = app
+        .call_as(Some(&bob_token), Method::POST, &claim(&theirs.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["status"], "IN_PROGRESS");
+
+    let (status, _) = app
+        .call_as(Some(&ann_token), Method::POST, &claim("no-such-task"), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // A race: many actors claim one task at once, exactly one wins.
+    let contested = app
+        .add_task(&graph_id, json!({ "name": "Contested" }))
+        .await;
+    let mut tokens = Vec::new();
+    for i in 0..8 {
+        app.add_actor(json!({ "name": format!("racer{i}") })).await;
+        let (token, _, _) = auth::issue_token(&mut app.graph, &format!("racer{i}"), "")
+            .await
+            .unwrap();
+        tokens.push(token);
+    }
+    let uri = claim(&contested.id);
+    let results = futures::future::join_all(
+        tokens
+            .iter()
+            .map(|t| app.call_as(Some(t), Method::POST, &uri, None)),
+    )
+    .await;
+    let won = results.iter().filter(|(s, _)| *s == StatusCode::OK).count();
+    let lost = results
+        .iter()
+        .filter(|(s, _)| *s == StatusCode::CONFLICT)
+        .count();
+    assert_eq!((won, lost), (1, 7), "{results:?}");
+    let task = app
+        .all_tasks(&graph_id)
+        .await
+        .into_iter()
+        .find(|t| t.id == contested.id)
+        .unwrap();
+    assert_eq!(task.users.len(), 1);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
 async fn free_text_users_migrate_to_actors() {
     let mut app = TestApp::new().await;
     let graph_id = app.create_graph().await;

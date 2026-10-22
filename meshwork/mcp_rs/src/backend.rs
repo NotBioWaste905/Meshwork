@@ -131,6 +131,13 @@ impl Backend {
         .await
     }
 
+    /// Takes the task for this client's actor; the backend refuses (409) unless it is free and
+    /// ready.
+    pub async fn claim_task(&self, graph: &str, id: &str) -> Result<Task, String> {
+        self.send(self.req(Method::POST, &format!("{graph}/task/{id}/claim")))
+            .await
+    }
+
     pub async fn update_task(
         &self,
         graph: &str,

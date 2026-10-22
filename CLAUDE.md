@@ -116,6 +116,9 @@ API (`/v0/...`):
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`,
   highest priority first
 - `POST :graph/task/add/` — body `NewTask`, only `name` required; returns the created `Task`, 201
+- `POST :graph/task/:id/claim` — the caller (token required, else 401) takes the task: one
+  query sets `IN_PROGRESS` and assigns them only if it is `TODO`, all deps `DONE` and nobody
+  else is assigned; otherwise 409 with the reason. Returns the `Task`.
 - `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored;
   `pr_url` that is neither empty nor `http(s)://…` → 400
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,

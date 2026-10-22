@@ -248,6 +248,21 @@ impl Meshwork {
     }
 
     #[tool(
+        description = "Take a task to work on: assigns you and sets IN_PROGRESS in one step, \
+                       only if it is TODO, every blocker is DONE and nobody else is assigned. \
+                       If it fails, someone was faster or the task is not ready: pick another \
+                       from list_ready_tasks. Prefer this over update_task for starting work.",
+        annotations(read_only_hint = false)
+    )]
+    async fn claim_task(
+        &self,
+        caller: Caller,
+        Parameters(a): Parameters<TaskArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        respond(caller.backend.claim_task(&a.graph_id, &a.task_id).await)
+    }
+
+    #[tool(
         description = "Create a task. Use blocked_by to declare which tasks must be DONE first.",
         annotations(read_only_hint = false)
     )]
@@ -271,7 +286,7 @@ impl Meshwork {
 
     #[tool(
         description = "Partially update a task; omitted fields stay unchanged. \
-                       Use status IN_PROGRESS when you start, REVIEW when work is ready, DONE only when verified.",
+                       To start work use claim_task; use status REVIEW when work is ready, DONE only when verified.",
         annotations(read_only_hint = false, idempotent_hint = true)
     )]
     async fn update_task(
@@ -336,7 +351,7 @@ impl Meshwork {
 #[tool_handler(
     name = "meshwork",
     instructions = "Meshwork is a task tracker where tasks are graph nodes and dependencies are explicit. \
-                    Call whoami to learn your actor id (list_actors for everyone else), list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, \
+                    Call whoami to learn your actor id (list_actors for everyone else), list_graphs to find the project's graph_id, list_ready_tasks to find unblocked work, get_task_context before starting, claim_task to take one, \
                     update_task to move status, and link_tasks to record new dependencies."
 )]
 impl ServerHandler for Meshwork {}
