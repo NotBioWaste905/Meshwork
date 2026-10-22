@@ -27,6 +27,17 @@ pub struct Task {
     pub graph_id: String,
 }
 
+/// A graph as `GET /v0/graphs` returns it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct GraphInfo {
+    pub id: String,
+    /// The graph's goal; empty for graphs created before graphs had names.
+    pub name: String,
+    pub task_count: i64,
+    pub done_count: i64,
+    pub blocked_count: i64,
+}
+
 #[derive(Serialize, Debug, Default)]
 pub struct NewTask {
     pub name: String,
@@ -49,4 +60,18 @@ pub struct TaskUpdate {
     pub users: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_graph_list_from_backend() {
+        let body =
+            r#"[{"id":"g1","name":"Ship it","task_count":3,"done_count":1,"blocked_count":0}]"#;
+        let graphs: Vec<GraphInfo> = serde_json::from_str(body).unwrap();
+        assert_eq!(graphs[0].name, "Ship it");
+        assert_eq!(graphs[0].task_count, 3);
+    }
 }
