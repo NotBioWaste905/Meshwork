@@ -1,6 +1,6 @@
 //! Pure graph queries over a fetched task list.
 
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 
 use crate::model::{Status, Task};
 
@@ -20,7 +20,7 @@ pub fn ready_tasks(tasks: &[Task], unassigned_only: bool) -> Vec<&Task> {
             })
         })
         .collect();
-    ready.sort_by(|a, b| b.priority.cmp(&a.priority));
+    ready.sort_by_key(|t| Reverse(t.priority));
     ready
 }
 

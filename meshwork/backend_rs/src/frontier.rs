@@ -1,6 +1,6 @@
 //! The frontier: tasks that can be picked up right now.
 
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 
 use crate::schemas::{Status, Task};
 
@@ -24,7 +24,7 @@ pub fn ready_tasks(tasks: Vec<Task>, unassigned_only: bool) -> Vec<Task> {
         .zip(ready)
         .filter_map(|(t, ready)| ready.then_some(t))
         .collect();
-    ready.sort_by(|a, b| b.priority.cmp(&a.priority));
+    ready.sort_by_key(|t| Reverse(t.priority));
     ready
 }
 
