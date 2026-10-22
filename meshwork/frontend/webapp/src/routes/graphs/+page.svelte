@@ -6,6 +6,7 @@
 	import { liveRefresh, mergeById } from '$lib/liveRefresh';
 	import { session } from '$lib/session.svelte';
 	import { shortId } from '$lib/status';
+	import { ago, formatDateTime } from '$lib/time';
 
 	const COLORS = ['#2349C7', '#0F766E', '#7A3FC4', '#B4530A'];
 
@@ -82,7 +83,8 @@
 	total: number,
 	blocked: number,
 	color: string,
-	id: string
+	id: string,
+	updatedAt: number | null
 )}
 	<svg viewBox="0 0 260 70" class="h-[70px] w-full" aria-hidden="true" fill="none">
 		<path
@@ -133,7 +135,15 @@
 				? 'bg-st-blocked-bg text-st-blocked-fg'
 				: 'bg-st-done-bg text-st-done-fg'}">{blocked ? `${blocked} blocked` : 'On track'}</span
 		>
-		<span class="text-muted font-mono text-[13px]" title="Graph ID">{id.slice(0, 8)}</span>
+		{#if updatedAt}
+			<time
+				class="text-muted text-[13px]"
+				datetime={new Date(updatedAt).toISOString()}
+				title="{formatDateTime(updatedAt)} · graph {id.slice(0, 8)}">Updated {ago(updatedAt)}</time
+			>
+		{:else}
+			<span class="text-muted font-mono text-[13px]" title="Graph ID">{id.slice(0, 8)}</span>
+		{/if}
 	</div>
 {/snippet}
 
@@ -215,7 +225,8 @@
 					g.task_count,
 					g.blocked_count,
 					COLORS[i % COLORS.length],
-					g.id
+					g.id,
+					g.updated_at
 				)}
 			</a>
 		{/each}

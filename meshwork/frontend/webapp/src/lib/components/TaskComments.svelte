@@ -3,6 +3,7 @@
 	import { graphStore } from '$lib/graphStore.svelte';
 	import { liveRefresh } from '$lib/liveRefresh';
 	import { session } from '$lib/session.svelte';
+	import { ago, formatDateTime } from '$lib/time';
 	import ActorAvatar from './ActorAvatar.svelte';
 	import Markdown from './Markdown.svelte';
 
@@ -60,21 +61,6 @@
 			(event.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
 		}
 	}
-
-	const dateFormat = new Intl.DateTimeFormat(undefined, {
-		dateStyle: 'medium',
-		timeStyle: 'short'
-	});
-
-	function ago(ms: number): string {
-		const minutes = Math.round((Date.now() - ms) / 60_000);
-		if (minutes < 1) return 'just now';
-		if (minutes < 60) return `${minutes} min ago`;
-		const hours = Math.round(minutes / 60);
-		if (hours < 24) return `${hours} h ago`;
-		const days = Math.round(hours / 24);
-		return days < 30 ? `${days} d ago` : dateFormat.format(ms);
-	}
 </script>
 
 <section aria-labelledby="comments" class="card flex flex-col gap-4 px-6 py-5">
@@ -99,7 +85,7 @@
 							<time
 								class="text-muted text-[13px]"
 								datetime={new Date(c.created_at).toISOString()}
-								title={dateFormat.format(c.created_at)}>{ago(c.created_at)}</time
+								title={formatDateTime(c.created_at)}>{ago(c.created_at)}</time
 							>
 						</div>
 						<Markdown source={c.body} class="max-w-[68ch]" />

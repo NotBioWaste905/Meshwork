@@ -107,6 +107,21 @@ export type OwnToken = {
 	current: boolean;
 };
 
+/** One entry of a task's change log. */
+export type TaskEvent = {
+	id: string;
+	kind: 'created' | 'field' | 'blocker_added' | 'blocker_removed';
+	/** For `field`: name, description, status, priority, pr_url, reporter, users or tags. */
+	field: string | null;
+	/** JSON values; the description is logged as changed, without its text. */
+	from: unknown;
+	to: unknown;
+	/** Actor ID; null without a token or once the actor was deleted. */
+	actor: string | null;
+	/** Milliseconds since the epoch. */
+	at: number;
+};
+
 /** A note an actor left on a task. */
 export type Comment = {
 	id: string;
@@ -262,6 +277,11 @@ export class MeshworkAPI {
 
 	updateTask(graphId: string, taskId: string, task: TaskUpdate): Promise<Task> {
 		return this.request('PUT', `/v0/${graphId}/task/${taskId}`, task);
+	}
+
+	/** The task's change log, oldest first. */
+	listEvents(graphId: string, taskId: string): Promise<TaskEvent[]> {
+		return this.request('GET', `/v0/${graphId}/task/${taskId}/events`);
 	}
 
 	/** Oldest first. */

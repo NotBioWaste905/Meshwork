@@ -7,8 +7,9 @@
 	import { graphStore } from '$lib/graphStore.svelte';
 	import { PRIORITY_ORDER, prLabel } from '$lib/priority';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
+	import { ago, formatDateTime } from '$lib/time';
 
-	type SortKey = 'status' | 'priority' | 'name' | 'assignee';
+	type SortKey = 'status' | 'priority' | 'name' | 'assignee' | 'updated';
 
 	let search = $state('');
 	let statusFilter = $state<'' | Status>('');
@@ -31,6 +32,7 @@
 			.toSorted((a, b) => {
 				if (sortKey === 'name') return a.name.localeCompare(b.name);
 				if (sortKey === 'assignee') return assigneeKey(a).localeCompare(assigneeKey(b));
+				if (sortKey === 'updated') return (b.updated_at ?? 0) - (a.updated_at ?? 0);
 				if (sortKey === 'priority')
 					return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
 				return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
@@ -40,6 +42,7 @@
 	const sortLabel: Record<SortKey, string> = {
 		status: 'status',
 		priority: 'priority',
+		updated: 'last update',
 		name: 'name',
 		assignee: 'assignee'
 	};
@@ -115,6 +118,11 @@
 						<th class="w-[180px]">BLOCKED BY</th>
 						<th class="w-[200px]">TAGS</th>
 						<th class="w-[160px]">PR</th>
+						<th class="w-[120px]" aria-sort={sortKey === 'updated' ? 'descending' : 'none'}>
+							<button type="button" class="sort" onclick={() => (sortKey = 'updated')}
+								>UPDATED</button
+							>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -173,6 +181,12 @@
 								{:else}
 									<span class="text-muted">—</span>
 								{/if}
+							</td>
+							<td class="text-muted text-[13px] whitespace-nowrap">
+								{#if task.updated_at}<time
+										datetime={new Date(task.updated_at).toISOString()}
+										title={formatDateTime(task.updated_at)}>{ago(task.updated_at)}</time
+									>{:else}—{/if}
 							</td>
 						</tr>
 					{/each}
