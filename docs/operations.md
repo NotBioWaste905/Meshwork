@@ -77,7 +77,31 @@ docker compose exec -T backend meshwork-token list [claude]
 docker compose exec -T backend meshwork-token revoke <token-id>
 ```
 
-`create` печатает в stdout только токен, поэтому его можно сразу положить в переменную:
-`export MESHWORK_MCP_TOKEN=$(docker compose exec -T backend meshwork-token create claude)` —
-её читает `.mcp.json` для Claude Code. Слияние актёров переносит их токены, удаление актёра
-удаляет и токены.
+`create` печатает в stdout только токен (`mw_…`), а в stderr — его id. Id нужен лишь для
+`revoke`; это не токен, с ним API и MCP ответят 401 «Not a Meshwork token». Слияние актёров
+переносит их токены, удаление актёра удаляет и токены.
+
+### Подключение Claude Code к MCP
+
+`.mcp.json` берёт токен из переменной `MESHWORK_MCP_TOKEN`. Проще всего выпустить его скриптом:
+
+```bash
+scripts/mcp-token.sh                # токен для claude → .mcp-token (в .gitignore, права 600)
+scripts/mcp-token.sh --launchctl    # то же + launchctl setenv для десктопного приложения (macOS)
+scripts/mcp-token.sh ann ~/ann.tok  # другой актёр и файл
+```
+
+Скрипт проверяет новый токен через `GET /v0/me` и подсказывает, как задать переменную.
+Две ловушки:
+
+- **Переменная читается только при запуске.** После замены токена перезапустите Claude Code;
+  до этого MCP-сервер так и останется отключённым.
+- **Десктопное приложение не видит переменных shell** (`~/.config/fish`, `~/.zshrc`): запущенное
+  из Dock, оно берёт окружение у launchd. Задайте `launchctl setenv MESHWORK_MCP_TOKEN "$(cat
+  .mcp-token)"` (или `--launchctl` у скрипта), затем закройте приложение целиком (Cmd+Q) и
+  откройте снова. `launchctl setenv` живёт до перезагрузки или выхода из системы. Проверить, что
+  видит launchd: `launchctl getenv MESHWORK_MCP_TOKEN`.
+
+Проверить токен вручную: `curl -H "Authorization: Bearer $(cat .mcp-token)" localhost:8000/v0/me`
+— 200 и актёр в ответе. Старые токены актёра остаются рабочими: `meshwork-token list claude`,
+затем `revoke` ненужных.

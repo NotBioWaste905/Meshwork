@@ -1025,6 +1025,12 @@ async fn bearer_tokens_identify_actors() {
             .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{bad}");
     }
+    // The usual mistake, a token's id instead of the token, gets a message saying so.
+    let (status, body) = app
+        .call_as(Some(&ann_token_id), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["message"], auth::NOT_A_TOKEN);
     assert_eq!(
         app.call(Method::GET, "/health", None).await.0,
         StatusCode::OK
