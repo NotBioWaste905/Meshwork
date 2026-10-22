@@ -14,6 +14,18 @@ pub enum Status {
     Blocked,
 }
 
+/// How urgent a task is; `NORMAL` unless set.
+#[derive(
+    Serialize, Deserialize, JsonSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default,
+)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Priority {
+    Low,
+    #[default]
+    Normal,
+    High,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Task {
     pub id: String,
@@ -25,6 +37,9 @@ pub struct Task {
     pub users: Vec<String>,
     pub tags: Vec<String>,
     pub status: Status,
+    pub priority: Priority,
+    /// Link to the task's pull request; empty when there is none.
+    pub pr_url: String,
     pub graph_id: String,
 }
 
@@ -46,6 +61,8 @@ pub struct NewTask {
     pub depends_on: Vec<String>,
     pub users: Vec<String>,
     pub tags: Vec<String>,
+    pub priority: Priority,
+    pub pr_url: String,
 }
 
 /// Fields left as `None` are omitted from the body and so stay unchanged.
@@ -61,6 +78,10 @@ pub struct TaskUpdate {
     pub users: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_url: Option<String>,
 }
 
 #[cfg(test)]

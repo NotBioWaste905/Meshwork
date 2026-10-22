@@ -14,7 +14,7 @@ use serde_json::json;
 use crate::{
     auth::Caller,
     graph,
-    model::{NewTask, Status, Task, TaskUpdate},
+    model::{NewTask, Priority, Status, Task, TaskUpdate},
 };
 
 /// The tools. Stateless: every call acts through its [`Caller`], the backend client of the
@@ -77,6 +77,8 @@ pub struct CreateTaskArgs {
     pub tags: Option<Vec<String>>,
     /// Assignee IDs.
     pub users: Option<Vec<String>>,
+    /// LOW, NORMAL (default) or HIGH.
+    pub priority: Option<Priority>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -92,6 +94,11 @@ pub struct UpdateTaskArgs {
     pub tags: Option<Vec<String>>,
     /// Replaces the whole assignee list.
     pub users: Option<Vec<String>>,
+    /// LOW, NORMAL or HIGH.
+    pub priority: Option<Priority>,
+    /// URL of the task's pull request (http or https); empty string removes it.
+    /// Set it when you open the PR and move the task to REVIEW.
+    pub pr_url: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -155,8 +162,8 @@ impl Meshwork {
     }
 
     #[tool(
-        description = "List tasks that can be started right now: status TODO and every blocker DONE. \
-                       Start here when looking for work.",
+        description = "List tasks that can be started right now: status TODO and every blocker DONE, \
+                       highest priority first. Start here when looking for work.",
         annotations(read_only_hint = true)
     )]
     async fn list_ready_tasks(
@@ -216,6 +223,8 @@ impl Meshwork {
             depends_on: a.blocked_by.unwrap_or_default(),
             users: a.users.unwrap_or_default(),
             tags: a.tags.unwrap_or_default(),
+            priority: a.priority.unwrap_or_default(),
+            pr_url: String::new(),
         };
         respond(caller.backend.add_task(&a.graph_id, &new).await)
     }
@@ -236,6 +245,8 @@ impl Meshwork {
             tags: a.tags,
             users: a.users,
             status: a.status,
+            priority: a.priority,
+            pr_url: a.pr_url,
         };
         respond(
             caller

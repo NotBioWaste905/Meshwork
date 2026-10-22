@@ -10,7 +10,9 @@ use falkordb::{AsyncGraph, QueryResult, Row, RowStream};
 use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
-use crate::schemas::{Actor, ActorKind, GraphInfo, Status, Task, TokenInfo};
+use crate::schemas::{
+    Actor, ActorKind, GraphInfo, NewTask, Priority, Status, Task, TaskUpdate, TokenInfo,
+};
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
     let mut data = result.data;
@@ -147,6 +149,11 @@ pub async fn ensure_tasks_in_graph(
 
 fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
     let status: String = row.try_get("status").map_err(db_err)?;
+    let priority = match row.try_get::<Option<String>>("priority").map_err(db_err)? {
+        Some(p) => Priority::parse(&p)
+            .ok_or_else(|| AppError::Internal(format!("Bad priority '{}' in DB", p)))?,
+        None => Priority::default(),
+    };
     Ok(Task {
         id: row.try_get("id").map_err(db_err)?,
         name: row.try_get("name").map_err(db_err)?,
@@ -162,6 +169,11 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
             .try_get::<Option<Vec<String>>>("tags")
             .map_err(db_err)?
             .unwrap_or_default(),
+        priority,
+        pr_url: row
+            .try_get::<Option<String>>("pr_url")
+            .map_err(db_err)?
+            .unwrap_or_default(),
         graph_id: graph_id.to_string(),
     })
 }
@@ -170,6 +182,7 @@ const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
      OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:Actor) \
      RETURN t.id AS id, t.name AS name, t.description AS description, \
             t.status AS status, t.tags AS tags, \
+            t.priority AS priority, t.pr_url AS pr_url, \
             collect(DISTINCT dep.id) AS dependencies, \
             collect(DISTINCT u.id) AS users \
      ORDER BY id";
@@ -217,44 +230,50 @@ pub async fn create_task(
     graph: &mut AsyncGraph,
     graph_id: &str,
     task_id: &str,
-    name: &str,
-    description: &str,
-    status: Status,
-    tags: &[String],
+    task: &NewTask,
 ) -> Result<()> {
     graph
         .query(
             "MATCH (g:Graph {id: $graph_id}) \
              CREATE (:Task {id: $id, name: $name, description: $description, \
-                            status: $status, tags: $tags})-[:PART_OF]->(g)",
+                            status: $status, tags: $tags, \
+                            priority: $priority, pr_url: $pr_url})-[:PART_OF]->(g)",
         )
         .with_param("graph_id", graph_id)
         .with_param("id", task_id)
-        .with_param("name", name)
-        .with_param("description", description)
-        .with_param("status", status.as_str())
-        .with_param("tags", tags.to_vec())
+        .with_param("name", task.name.as_str())
+        .with_param("description", task.description.as_str())
+        .with_param("status", task.status.as_str())
+        .with_param("tags", task.tags.clone())
+        .with_param("priority", task.priority.as_str())
+        .with_param("pr_url", task.pr_url.as_str())
         .execute()
         .await
         .map_err(db_err)?;
     Ok(())
 }
 
-/// Updates the scalar properties that are `Some`.
+/// Updates the node's own properties that are `Some` in `update`; dependencies and
+/// assignees (edges) are left to the caller.
 pub async fn update_task_props(
     graph: &mut AsyncGraph,
     task_id: &str,
-    name: Option<&str>,
-    description: Option<&str>,
-    status: Option<Status>,
-    tags: Option<&[String]>,
+    update: &TaskUpdate,
 ) -> Result<()> {
+    let name = update.name.as_deref();
+    let description = update.description.as_deref();
+    let status = update.status;
+    let tags = update.tags.as_deref();
+    let priority = update.priority;
+    let pr_url = update.pr_url.as_deref();
     // Only fixed fragments go into the query string; values are parameters.
     let sets: Vec<&str> = [
         name.map(|_| "t.name = $name"),
         description.map(|_| "t.description = $description"),
         status.map(|_| "t.status = $status"),
         tags.map(|_| "t.tags = $tags"),
+        priority.map(|_| "t.priority = $priority"),
+        pr_url.map(|_| "t.pr_url = $pr_url"),
     ]
     .into_iter()
     .flatten()
@@ -276,6 +295,12 @@ pub async fn update_task_props(
     }
     if let Some(tags) = tags {
         query = query.with_param("tags", tags.to_vec());
+    }
+    if let Some(priority) = priority {
+        query = query.with_param("priority", priority.as_str());
+    }
+    if let Some(pr_url) = pr_url {
+        query = query.with_param("pr_url", pr_url);
     }
     query.execute().await.map_err(db_err)?;
     Ok(())

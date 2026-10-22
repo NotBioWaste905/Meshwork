@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { Status } from '$lib/api';
+	import { Priority, Status } from '$lib/api';
 	import { graphStore } from '$lib/graphStore.svelte';
+	import { PRIORITY_LABEL, PRIORITY_ORDER } from '$lib/priority';
 	import { shortId, STATUS_META } from '$lib/status';
 	import AssigneePicker from './AssigneePicker.svelte';
 
@@ -11,6 +12,7 @@
 	let description = $state('');
 	let kind = $state<'task' | 'chore'>('task');
 	let status = $state<Status>(Status.TODO);
+	let priority = $state<Priority>(Priority.NORMAL);
 	/** Actor ID, '' for unassigned. */
 	let assignee = $state('');
 	let blockers = $state<string[]>([]);
@@ -38,6 +40,7 @@
 			description = '';
 			kind = 'task';
 			status = Status.TODO;
+			priority = Priority.NORMAL;
 			assignee = '';
 			blockers = [];
 			tags = [];
@@ -67,6 +70,7 @@
 			name: name.trim(),
 			description,
 			status,
+			priority,
 			tags: allTags,
 			users: assignee ? [assignee] : [],
 			depends_on: blockers
@@ -149,7 +153,7 @@
 					></textarea>
 				</div>
 
-				<div class="grid grid-cols-3 gap-4">
+				<div class="grid grid-cols-2 gap-4">
 					<div class="flex min-w-0 flex-col gap-1.5">
 						<label for="nt-type" class="text-sm font-medium">Type</label>
 						<select id="nt-type" class="field" bind:value={kind}>
@@ -162,6 +166,14 @@
 						<select id="nt-status" class="field" bind:value={status}>
 							{#each [Status.TODO, Status.IN_PROGRESS] as s (s)}
 								<option value={s}>{STATUS_META[s].label}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label for="nt-priority" class="text-sm font-medium">Priority</label>
+						<select id="nt-priority" class="field" bind:value={priority}>
+							{#each PRIORITY_ORDER as p (p)}
+								<option value={p}>{PRIORITY_LABEL[p]}</option>
 							{/each}
 						</select>
 					</div>

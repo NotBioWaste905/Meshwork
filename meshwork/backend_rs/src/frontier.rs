@@ -4,8 +4,9 @@ use std::collections::HashMap;
 
 use crate::schemas::{Status, Task};
 
-/// Tasks in `TODO` whose every dependency is `DONE`. With `unassigned_only`,
-/// tasks that already have assignees are left out.
+/// Tasks in `TODO` whose every dependency is `DONE`, highest priority first (the
+/// input order is kept within a priority). With `unassigned_only`, tasks that
+/// already have assignees are left out.
 pub fn ready_tasks(tasks: Vec<Task>, unassigned_only: bool) -> Vec<Task> {
     let status: HashMap<&str, Status> = tasks.iter().map(|t| (t.id.as_str(), t.status)).collect();
     let ready: Vec<bool> = tasks
@@ -18,16 +19,19 @@ pub fn ready_tasks(tasks: Vec<Task>, unassigned_only: bool) -> Vec<Task> {
                     .all(|d| status.get(d.as_str()) == Some(&Status::Done))
         })
         .collect();
-    tasks
+    let mut ready: Vec<Task> = tasks
         .into_iter()
         .zip(ready)
         .filter_map(|(t, ready)| ready.then_some(t))
-        .collect()
+        .collect();
+    ready.sort_by(|a, b| b.priority.cmp(&a.priority));
+    ready
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::Priority;
 
     fn task(id: &str, status: Status, deps: &[&str], users: &[&str]) -> Task {
         Task {
@@ -38,6 +42,8 @@ mod tests {
             users: users.iter().map(|s| s.to_string()).collect(),
             tags: vec![],
             status,
+            priority: Priority::Normal,
+            pr_url: String::new(),
             graph_id: "g".into(),
         }
     }
@@ -69,6 +75,21 @@ mod tests {
         };
         assert_eq!(ids(ready_tasks(tasks(), true)), vec!["b"]);
         assert_eq!(ids(ready_tasks(tasks(), false)), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn highest_priority_first() {
+        let with = |id, priority| Task {
+            priority,
+            ..task(id, Status::Todo, &[], &[])
+        };
+        let tasks = vec![
+            with("a", Priority::Low),
+            with("b", Priority::Normal),
+            with("c", Priority::High),
+            with("d", Priority::Normal),
+        ];
+        assert_eq!(ids(ready_tasks(tasks, false)), vec!["c", "b", "d", "a"]);
     }
 
     #[test]

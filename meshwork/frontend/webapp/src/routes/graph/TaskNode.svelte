@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
+	import PriorityMark from '$lib/components/PriorityMark.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { Status } from '$lib/api';
 	import type { TaskFlowNode } from './types';
@@ -39,6 +40,7 @@
 		{:else}
 			<StatusPill status={data.status} size="xs" dot />
 		{/if}
+		<span class="mr-auto"><PriorityMark priority={data.priority} dark={data.terminal} /></span>
 		{#if data.users[0]}
 			<ActorAvatar id={data.users[0]} size={22} />
 		{/if}

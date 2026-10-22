@@ -274,6 +274,7 @@ async fn add_task(
             "Task name cannot be empty".to_string(),
         ));
     }
+    validate_pr_url(&task.pr_url)?;
 
     let mut graph = state.graph.clone();
     db::ensure_graph(&mut graph, &graph_id).await?;
@@ -282,16 +283,7 @@ async fn add_task(
 
     let id = Uuid::new_v4().to_string();
     info!("Adding task '{}' to graph '{}'", id, graph_id);
-    db::create_task(
-        &mut graph,
-        &graph_id,
-        &id,
-        &task.name,
-        &task.description,
-        task.status,
-        &task.tags,
-    )
-    .await?;
+    db::create_task(&mut graph, &graph_id, &id, &task).await?;
     db::set_dependencies(&mut graph, &id, &task.depends_on).await?;
     db::set_users(&mut graph, &id, &users).await?;
 
@@ -345,6 +337,9 @@ async fn edit_task(
             "Task name cannot be empty".to_string(),
         ));
     }
+    if let Some(pr_url) = &update.pr_url {
+        validate_pr_url(pr_url)?;
+    }
 
     let mut graph = state.graph.clone();
     db::get_task(&mut graph, &graph_id, &task_id).await?;
@@ -362,15 +357,7 @@ async fn edit_task(
         None => None,
     };
 
-    db::update_task_props(
-        &mut graph,
-        &task_id,
-        update.name.as_deref(),
-        update.description.as_deref(),
-        update.status,
-        update.tags.as_deref(),
-    )
-    .await?;
+    db::update_task_props(&mut graph, &task_id, &update).await?;
     if let Some(deps) = &update.depends_on {
         db::set_dependencies(&mut graph, &task_id, deps).await?;
     }
@@ -379,6 +366,19 @@ async fn edit_task(
     }
 
     Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
+}
+
+/// A PR link is shown as a clickable link, so only `http(s)` URLs (or nothing) are accepted.
+fn validate_pr_url(pr_url: &str) -> Result<()> {
+    let lower = pr_url.to_ascii_lowercase();
+    if pr_url.is_empty() || lower.starts_with("https://") || lower.starts_with("http://") {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(format!(
+            "PR link must be an http(s) URL or empty, got '{}'",
+            pr_url
+        )))
+    }
 }
 
 /// Rejects making `task_id` depend on any of `depends_on` if that would

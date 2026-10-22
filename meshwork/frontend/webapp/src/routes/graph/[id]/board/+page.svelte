@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import GraphHeader from '$lib/components/GraphHeader.svelte';
+	import PriorityMark from '$lib/components/PriorityMark.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
@@ -68,9 +69,12 @@
 							: 'border-line border'}"
 					>
 						<div class="flex items-center justify-between">
-							<span class="font-mono text-xs {dark ? 'text-faint' : 'text-muted'}"
-								>{shortId(task)}</span
-							>
+							<span class="flex items-center gap-2">
+								<span class="font-mono text-xs {dark ? 'text-faint' : 'text-muted'}"
+									>{shortId(task)}</span
+								>
+								<PriorityMark priority={task.priority} {dark} />
+							</span>
 							{#if task.users[0]}<ActorAvatar id={task.users[0]} size={24} />{/if}
 						</div>
 						<div class="text-sm leading-snug font-medium">{task.name}</div>

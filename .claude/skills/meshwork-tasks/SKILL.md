@@ -23,6 +23,8 @@ status in the graph is the truth.
 - **Name**: short English title. **Description**: Russian, what to do and how to tell it is done.
 - **Tags**: milestone (`m0`…`m4`, `post-mvp`) + area (`backend`, `frontend`, `mcp`, `ops`,
   `docs`, `process`, `security`).
+- **Priority**: `NORMAL` by default; `HIGH` for what should go first (`list_ready_tasks` puts
+  it first), `LOW` for nice-to-haves.
 - **Assignee** (`users`): `claude` for any Claude agent, the person's name for a human.
 - **Edges**: `link_tasks(blocker, blocked)` — "blocker must be DONE before blocked starts".
   No cycles (409). Only real blocking relations; "would be nice first" is not an edge.
@@ -33,7 +35,7 @@ status in the graph is the truth.
 ## The loop
 
 1. **Find work.** `list_ready_tasks(graph_id)` — `TODO`, unassigned, all blockers `DONE`.
-   Prefer the lowest milestone tag, then the task that unblocks the most (`get_task_context`
+   Prefer the lowest milestone tag, then `HIGH` priority, then the task that unblocks the most (`get_task_context`
    → `blocks`). If the user named a task, use that one. Skip tasks that need the user's machine
    or accounts (`ops` like cron/launchd, secrets) unless the user asked — propose them instead.
 2. **Read context.** `get_task_context(graph_id, task_id)`: description, blockers' results,
@@ -50,7 +52,7 @@ status in the graph is the truth.
    `link_tasks`. If it blocks *your* task, link it, put your task back to `TODO` with
    `users: []`, and say so in your report.
 6. **Hand in.** Commit (short imperative English message), push, open a PR into `dev`. Then
-   `update_task(status: REVIEW, description: <old description + result block>)`. Until task
+   `update_task(status: REVIEW, pr_url: <PR URL>, description: <old description + result block>)`. Until task
    artifacts exist, the result goes at the end of the description:
 
    ```

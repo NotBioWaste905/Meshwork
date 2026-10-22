@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Status, type Task } from '$lib/api';
+	import { Priority, Status, type Task } from '$lib/api';
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import AssigneePicker from '$lib/components/AssigneePicker.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
+	import { prLabel, PRIORITY_LABEL, PRIORITY_ORDER } from '$lib/priority';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
 	let taskId = $derived(page.params.taskId ?? '');
@@ -47,6 +48,7 @@
 	let editName = $state('');
 	let editDescription = $state('');
 	let editTags = $state('');
+	let editPrUrl = $state('');
 	let saving = $state(false);
 	let addingBlocker = $state(false);
 
@@ -67,6 +69,7 @@
 		editName = task.name;
 		editDescription = task.description;
 		editTags = task.tags.join(', ');
+		editPrUrl = task.pr_url;
 		editing = true;
 	}
 
@@ -85,7 +88,8 @@
 		const saved = await graphStore.updateTask(task.id, {
 			name: editName.trim(),
 			description: editDescription,
-			tags
+			tags,
+			pr_url: editPrUrl.trim()
 		});
 		saving = false;
 		if (saved) editing = false;
@@ -93,6 +97,10 @@
 
 	function setStatus(status: Status) {
 		if (task && status !== task.status) graphStore.updateTask(task.id, { status });
+	}
+
+	function setPriority(priority: Priority) {
+		if (task && priority !== task.priority) graphStore.updateTask(task.id, { priority });
 	}
 
 	function setAssignee(actorId: string) {
@@ -181,6 +189,16 @@
 						<div class="flex flex-col gap-1.5">
 							<label for="e-tags" class="text-sm font-medium">Tags (comma separated)</label>
 							<input id="e-tags" class="field" bind:value={editTags} />
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<label for="e-pr" class="text-sm font-medium">Pull request</label>
+							<input
+								id="e-pr"
+								type="url"
+								class="field"
+								placeholder="https://github.com/owner/repo/pull/123"
+								bind:value={editPrUrl}
+							/>
 						</div>
 						<div class="flex gap-3">
 							<button type="submit" class="btn btn-primary btn-sm" disabled={saving}>
@@ -320,6 +338,33 @@
 									<option value={s}>{STATUS_META[s].label}</option>
 								{/each}
 							</select>
+						</dd>
+						<dt class="text-muted">Priority</dt>
+						<dd class="m-0">
+							<select
+								class="border-line-strong bg-surface h-8 rounded-lg border py-0 pr-8 pl-3 text-sm font-medium"
+								aria-label="Priority"
+								value={task.priority}
+								onchange={(e) => setPriority(e.currentTarget.value as Priority)}
+							>
+								{#each PRIORITY_ORDER as p (p)}
+									<option value={p}>{PRIORITY_LABEL[p]}</option>
+								{/each}
+							</select>
+						</dd>
+						<dt class="text-muted">Pull request</dt>
+						<dd class="m-0 min-w-0 truncate">
+							{#if task.pr_url}
+								<a href={task.pr_url} target="_blank" rel="noopener noreferrer" title={task.pr_url}
+									>{prLabel(task.pr_url)}</a
+								>
+							{:else}
+								<button
+									type="button"
+									class="text-accent text-sm font-medium hover:underline"
+									onclick={startEdit}>Add link</button
+								>
+							{/if}
 						</dd>
 						<dt class="text-muted">Assignee</dt>
 						<dd class="m-0 flex items-center gap-2">

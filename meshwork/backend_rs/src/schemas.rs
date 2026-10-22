@@ -30,6 +30,31 @@ impl Status {
     }
 }
 
+/// How urgent a task is. Tasks stored before priorities existed read as `Normal`.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Priority {
+    Low,
+    #[default]
+    Normal,
+    High,
+}
+
+impl Priority {
+    /// Value stored in the `priority` property of a `:Task` node.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Priority::Low => "LOW",
+            Priority::Normal => "NORMAL",
+            Priority::High => "HIGH",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Priority> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+}
+
 /// A task as returned by the API.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Task {
@@ -42,6 +67,9 @@ pub struct Task {
     pub users: Vec<String>,
     pub tags: Vec<String>,
     pub status: Status,
+    pub priority: Priority,
+    /// Link to the pull request doing the task; empty when there is none.
+    pub pr_url: String,
     pub graph_id: String,
 }
 
@@ -61,6 +89,11 @@ pub struct NewTask {
     pub tags: Vec<String>,
     #[serde(default)]
     pub status: Status,
+    #[serde(default)]
+    pub priority: Priority,
+    /// An `http(s)` URL or empty.
+    #[serde(default)]
+    pub pr_url: String,
 }
 
 /// Request body for editing a task. Omitted fields are left unchanged; list
@@ -75,6 +108,9 @@ pub struct TaskUpdate {
     pub users: Option<Vec<String>>,
     pub tags: Option<Vec<String>>,
     pub status: Option<Status>,
+    pub priority: Option<Priority>,
+    /// An `http(s)` URL, or empty to remove the link.
+    pub pr_url: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
