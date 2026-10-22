@@ -224,6 +224,104 @@ async fn edit_task_partial_and_whole() {
 
 #[tokio::test]
 #[ignore = "needs FalkorDB"]
+async fn priority_and_pr_url() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+
+    let plain = app.add_task(&graph_id, json!({ "name": "Plain" })).await;
+    assert_eq!(
+        serde_json::to_value(plain.priority).unwrap(),
+        json!("NORMAL")
+    );
+    assert_eq!(plain.pr_url, "");
+
+    let urgent = app
+        .add_task(
+            &graph_id,
+            json!({
+                "name": "Urgent",
+                "priority": "HIGH",
+                "pr_url": "https://github.com/o/r/pull/1",
+            }),
+        )
+        .await;
+    assert_eq!(
+        serde_json::to_value(urgent.priority).unwrap(),
+        json!("HIGH")
+    );
+    assert_eq!(urgent.pr_url, "https://github.com/o/r/pull/1");
+
+    // Partial edits; an empty link removes it.
+    let uri = format!("/v0/{graph_id}/task/{}", urgent.id);
+    let (status, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "priority": "LOW" })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["priority"], "LOW");
+    assert_eq!(body["pr_url"], "https://github.com/o/r/pull/1");
+    let (status, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "pr_url": "" })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["pr_url"], "");
+
+    // Only http(s) links, so the UI never renders e.g. a javascript: link.
+    for bad in ["javascript:alert(1)", "github.com/o/r/pull/1"] {
+        let (status, _) = app
+            .call(Method::PUT, &uri, Some(json!({ "pr_url": bad })))
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+        let (status, _) = app
+            .call(
+                Method::POST,
+                &format!("/v0/{graph_id}/task/add/"),
+                Some(json!({ "name": "X", "pr_url": bad })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+
+    // Tasks stored before these fields existed read as NORMAL without a link.
+    app.graph
+        .query("MATCH (t:Task {id: $id}) REMOVE t.priority, t.pr_url")
+        .with_param("id", plain.id.as_str())
+        .execute()
+        .await
+        .unwrap();
+    let (status, body) = app
+        .call(
+            Method::GET,
+            &format!("/v0/{graph_id}/task/{}", plain.id),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        (&body["priority"], &body["pr_url"]),
+        (&json!("NORMAL"), &json!(""))
+    );
+
+    // The frontier lists higher priorities first.
+    let high = app
+        .add_task(&graph_id, json!({ "name": "High", "priority": "HIGH" }))
+        .await;
+    let (status, body) = app
+        .call(Method::GET, &format!("/v0/{graph_id}/ready_tasks"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let names: Vec<String> = serde_json::from_value::<Vec<Task>>(body)
+        .unwrap()
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    assert_eq!(names.first(), Some(&high.name));
+    assert_eq!(names.last(), Some(&"Urgent".to_string()));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
 async fn connect_disconnect_and_delete() {
     let app = TestApp::new().await;
     let graph_id = app.create_graph().await;

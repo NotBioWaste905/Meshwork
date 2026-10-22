@@ -75,7 +75,7 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 
 ```
 (:Graph {id, name, created_at})     # name is the goal, "" for unnamed/older graphs
-(:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph)
+(:Task {id, name, description, status, tags: [string], priority, pr_url})-[:PART_OF]->(:Graph)
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 (:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
@@ -96,7 +96,9 @@ from the old free-text `(:User {id: <text>})` keep the text as id and name (`kin
 idempotent; put future data migrations there too.
 
 `status` is stored as the API string: `TODO`, `IN_PROGRESS`, `DONE`, `REVIEW`, `BLOCKED`
-(`Status::as_str`); legacy `InProgress` is read via a serde alias.
+(`Status::as_str`); legacy `InProgress` is read via a serde alias. `priority` is `LOW`, `NORMAL`
+or `HIGH` (`Priority::as_str`), `pr_url` an `http(s)` URL or `""`; tasks stored without them
+read as `NORMAL` and `""`.
 
 `DEPENDS_ON` is the blocking edge MISSION.md calls `BLOCKS`: `(a)-[:DEPENDS_ON]->(b)` means
 "b blocks a". Keep the name `DEPENDS_ON`, do not rename it.
@@ -107,9 +109,11 @@ API (`/v0/...`):
 - `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count}]`
 - `GET :graph` — one graph in the same shape; `PUT :graph` with `{name}` renames (blank → 400)
 - `GET :graph/all_tasks`
-- `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`
+- `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`,
+  highest priority first
 - `POST :graph/task/add/` — body `NewTask`, only `name` required; returns the created `Task`, 201
-- `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored
+- `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored;
+  `pr_url` that is neither empty nor `http(s)://…` → 400
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,
   unknown → 404 (validated before any write)
 - `GET me` — the actor of the request's token, 401 without one

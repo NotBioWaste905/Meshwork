@@ -7,6 +7,12 @@ export enum Status {
 	BLOCKED = 'BLOCKED'
 }
 
+export enum Priority {
+	LOW = 'LOW',
+	NORMAL = 'NORMAL',
+	HIGH = 'HIGH'
+}
+
 // A type alias rather than an interface so it fits xyflow's Record<string, unknown> node data.
 export type Task = {
 	id: string;
@@ -18,12 +24,17 @@ export type Task = {
 	users: string[];
 	tags: string[];
 	status: Status;
+	priority: Priority;
+	/** Link to the task's pull request, an http(s) URL; empty when there is none. */
+	pr_url: string;
 	graph_id: string;
 };
 
 /** Body for creating a task: the server assigns the ID, the graph comes from the URL. */
 export type NewTask = Pick<Task, 'name'> &
-	Partial<Pick<Task, 'description' | 'depends_on' | 'users' | 'tags' | 'status'>>;
+	Partial<
+		Pick<Task, 'description' | 'depends_on' | 'users' | 'tags' | 'status' | 'priority' | 'pr_url'>
+	>;
 
 /** Body for editing a task: omitted fields stay unchanged, lists are replaced. */
 export type TaskUpdate = Partial<Omit<Task, 'id' | 'graph_id'>>;

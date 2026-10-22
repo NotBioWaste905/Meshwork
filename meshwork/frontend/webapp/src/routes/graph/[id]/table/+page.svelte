@@ -2,11 +2,13 @@
 	import { Status } from '$lib/api';
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import GraphHeader from '$lib/components/GraphHeader.svelte';
+	import PriorityMark from '$lib/components/PriorityMark.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
+	import { PRIORITY_ORDER, prLabel } from '$lib/priority';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
-	type SortKey = 'status' | 'name' | 'assignee';
+	type SortKey = 'status' | 'priority' | 'name' | 'assignee';
 
 	let search = $state('');
 	let statusFilter = $state<'' | Status>('');
@@ -29,12 +31,15 @@
 			.toSorted((a, b) => {
 				if (sortKey === 'name') return a.name.localeCompare(b.name);
 				if (sortKey === 'assignee') return assigneeKey(a).localeCompare(assigneeKey(b));
+				if (sortKey === 'priority')
+					return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
 				return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
 			})
 	);
 
 	const sortLabel: Record<SortKey, string> = {
 		status: 'status',
+		priority: 'priority',
 		name: 'name',
 		assignee: 'assignee'
 	};
@@ -97,6 +102,11 @@
 							<button type="button" class="sort" onclick={() => (sortKey = 'status')}>STATUS</button
 							>
 						</th>
+						<th class="w-[100px]" aria-sort={sortKey === 'priority' ? 'ascending' : 'none'}>
+							<button type="button" class="sort" onclick={() => (sortKey = 'priority')}
+								>PRIORITY</button
+							>
+						</th>
 						<th class="w-[200px]" aria-sort={sortKey === 'assignee' ? 'ascending' : 'none'}>
 							<button type="button" class="sort" onclick={() => (sortKey = 'assignee')}
 								>ASSIGNEE</button
@@ -104,6 +114,7 @@
 						</th>
 						<th class="w-[180px]">BLOCKED BY</th>
 						<th class="w-[200px]">TAGS</th>
+						<th class="w-[160px]">PR</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -123,6 +134,7 @@
 								{/if}
 							</td>
 							<td><StatusPill status={task.status} /></td>
+							<td><PriorityMark priority={task.priority} /></td>
 							<td>
 								{#if task.users.length > 0}
 									<span class="inline-flex items-center gap-2">
@@ -149,6 +161,18 @@
 										>
 									{/each}
 								</span>
+							</td>
+							<td class="max-w-[160px] truncate text-[13px]">
+								{#if task.pr_url}
+									<a
+										href={task.pr_url}
+										target="_blank"
+										rel="noopener noreferrer"
+										title={task.pr_url}>{prLabel(task.pr_url)}</a
+									>
+								{:else}
+									<span class="text-muted">—</span>
+								{/if}
 							</td>
 						</tr>
 					{/each}
