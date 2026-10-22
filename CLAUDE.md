@@ -85,6 +85,7 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
 (:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
 (:Comment {id, body, created_at})-[:ON]->(:Task), (:Comment)-[:BY]->(:Actor)  # body is Markdown
+(:Event {id, kind, field, from, to, at, seq})-[:ON]->(:Task), (:Event)-[:BY]->(:Actor)  # change log
 ```
 
 **Auth.** Every `/v0/` request may carry `Authorization: Bearer mw_…`, an actor token; the
@@ -149,6 +150,12 @@ API (`/v0/...`):
   `{body}` (token required, else 401; blank or over 20 000 chars → 400) → 201 `Comment` by the
   caller. Deleting a task deletes its comments; merging actors moves authorship; deleting an
   actor keeps its comments with `author: null`.
+- `GET :graph/task/:id/events` — the change log, oldest first: `[{id, kind, field, from, to,
+  actor, at}]`. `kind`: `created`, `field` (`name`, `description`, `status`, `priority`,
+  `pr_url`, `reporter`, `users`, `tags`; the description is logged as changed, without its
+  text), `blocker_added` / `blocker_removed` (`to` = the blocking task). Written by create, PUT
+  (a diff of the task before and after, `events::diff`), claim and the edge endpoints; a new
+  write path that changes a task must log too. Deleted with the task.
 - `PUT :graph/layout` with `{positions: {<task id>: {x, y}}}` — saves canvas positions (returned
   as `Task.position`, `null` until placed) in one query; a task outside the graph → 404 and
   nothing saved. Not a task change: `updated_at` stays. The canvas saves the whole layout on
