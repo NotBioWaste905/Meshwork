@@ -10,7 +10,7 @@ use falkordb::{AsyncGraph, QueryResult, Row, RowStream};
 use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
-use crate::schemas::{Actor, ActorKind, GraphInfo, Status, Task};
+use crate::schemas::{Actor, ActorKind, GraphInfo, Status, Task, TokenInfo};
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
     let mut data = result.data;
@@ -530,10 +530,14 @@ pub async fn update_actor(
     Ok(())
 }
 
-/// Deletes the actor together with its `ASSIGNED_TO` edges.
+/// Deletes the actor together with its `ASSIGNED_TO` edges and its tokens.
 pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> {
     graph
-        .query("MATCH (a:Actor {id: $id}) DETACH DELETE a")
+        .query(
+            "MATCH (a:Actor {id: $id}) \
+             OPTIONAL MATCH (k:Token)-[:OF]->(a) \
+             DETACH DELETE k, a",
+        )
         .with_param("id", actor_id)
         .execute()
         .await
@@ -541,8 +545,8 @@ pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Moves the tasks assigned to `from` over to `into`, then deletes `from`. A task assigned to
-/// both keeps one edge. If interrupted between the two queries, `from` is still there and the
+/// Moves the tasks assigned to `from` and its tokens over to `into`, then deletes `from`. A task
+/// assigned to both keeps one edge; a token of the duplicate now acts as `into`. If interrupted between the two queries, `from` is still there and the
 /// merge can simply be repeated.
 pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Result<()> {
     graph
@@ -556,7 +560,115 @@ pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Resu
         .execute()
         .await
         .map_err(db_err)?;
+    graph
+        .query(
+            "MATCH (k:Token)-[r:OF]->(:Actor {id: $from}) \
+             MATCH (d:Actor {id: $into}) \
+             CREATE (k)-[:OF]->(d) \
+             DELETE r",
+        )
+        .with_param("from", from)
+        .with_param("into", into)
+        .execute()
+        .await
+        .map_err(db_err)?;
     delete_actor(graph, from).await
+}
+
+/// Stores an API token as `(:Token {id, hash, label, created_at})-[:OF]->(:Actor)`. Only the
+/// hash is stored; the token itself is shown once, by whoever issued it.
+pub async fn create_token(
+    graph: &mut AsyncGraph,
+    token_id: &str,
+    hash: &str,
+    actor_id: &str,
+    label: &str,
+) -> Result<()> {
+    graph
+        .query(
+            "MATCH (a:Actor {id: $actor}) \
+             CREATE (:Token {id: $id, hash: $hash, label: $label, created_at: timestamp()})-[:OF]->(a)",
+        )
+        .with_param("actor", actor_id)
+        .with_param("id", token_id)
+        .with_param("hash", hash)
+        .with_param("label", label)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// The actor a token hash belongs to, if the token exists.
+pub async fn actor_by_token_hash(graph: &mut AsyncGraph, hash: &str) -> Result<Option<Actor>> {
+    let q = format!(
+        "MATCH (:Token {{hash: $hash}})-[:OF]->(a:Actor) {}",
+        ACTOR_RETURN
+    );
+    let result = graph
+        .query(q)
+        .with_param("hash", hash)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .first()
+        .map(row_to_actor)
+        .transpose()
+}
+
+/// Tokens of one actor, or of everyone; never the hashes.
+pub async fn list_tokens(graph: &mut AsyncGraph, actor_id: Option<&str>) -> Result<Vec<TokenInfo>> {
+    let q = format!(
+        "MATCH (k:Token)-[:OF]->(a:Actor) {} \
+         RETURN k.id AS id, k.label AS label, k.created_at AS created_at, \
+                a.id AS actor_id, a.name AS actor_name \
+         ORDER BY toLower(actor_name), created_at",
+        if actor_id.is_some() {
+            "WHERE a.id = $actor"
+        } else {
+            ""
+        }
+    );
+    let mut query = graph.query(q);
+    if let Some(actor_id) = actor_id {
+        query = query.with_param("actor", actor_id);
+    }
+    let result = query.execute().await.map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(|row| {
+            Ok(TokenInfo {
+                id: row.try_get("id").map_err(db_err)?,
+                label: row.try_get("label").map_err(db_err)?,
+                created_at: row.try_get("created_at").map_err(db_err)?,
+                actor_id: row.try_get("actor_id").map_err(db_err)?,
+                actor_name: row.try_get("actor_name").map_err(db_err)?,
+            })
+        })
+        .collect()
+}
+
+/// Deletes a token; returns whether it existed.
+pub async fn revoke_token(graph: &mut AsyncGraph, token_id: &str) -> Result<bool> {
+    let result = graph
+        .query("MATCH (k:Token {id: $id}) RETURN count(k) AS n")
+        .with_param("id", token_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    if first_count(&collect_rows(result).await?)? == 0 {
+        return Ok(false);
+    }
+    graph
+        .query("MATCH (k:Token {id: $id}) DETACH DELETE k")
+        .with_param("id", token_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(true)
 }
 
 /// Maps each reference — an actor ID or, failing that, an actor name — to the

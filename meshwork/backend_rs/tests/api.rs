@@ -14,7 +14,7 @@ use axum::{
     Router,
 };
 use backend_rs::{
-    app, connection, cors_layer,
+    app, auth, connection, cors_layer,
     schemas::{Actor, ActorKind, Task},
     AppState,
 };
@@ -56,7 +56,21 @@ impl TestApp {
     }
 
     async fn call(&self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
-        let request = Request::builder().method(method).uri(uri);
+        self.call_as(None, method, uri, body).await
+    }
+
+    /// Like [`call`](Self::call), with `Authorization: Bearer <token>` when a token is given.
+    async fn call_as(
+        &self,
+        token: Option<&str>,
+        method: Method,
+        uri: &str,
+        body: Option<Value>,
+    ) -> (StatusCode, Value) {
+        let mut request = Request::builder().method(method).uri(uri);
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
         let request = match body {
             Some(body) => request
                 .header(header::CONTENT_TYPE, "application/json")
@@ -864,6 +878,108 @@ async fn actors_delete_and_merge() {
         .call(Method::DELETE, &format!("/v0/actors/{}", free.id), None)
         .await;
     assert_eq!(status, StatusCode::OK);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn bearer_tokens_identify_actors() {
+    let mut app = TestApp::new().await;
+    let ann = app.add_actor(json!({ "name": "Ann" })).await;
+    let dup = app.add_actor(json!({ "name": "ann" })).await;
+    let bob = app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, ann_token_id, issued_for) = auth::issue_token(&mut app.graph, "Ann", "laptop")
+        .await
+        .unwrap();
+    assert_eq!(issued_for.id, ann.id);
+    let (dup_token, _, _) = auth::issue_token(&mut app.graph, &dup.id, "")
+        .await
+        .unwrap();
+    let (bob_token, _, _) = auth::issue_token(&mut app.graph, "bob", "").await.unwrap();
+    assert!(auth::issue_token(&mut app.graph, "nobody", "")
+        .await
+        .is_err());
+
+    // Who am I: the token's actor; nobody without a token.
+    let (status, body) = app
+        .call_as(Some(&ann_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], json!(ann.id));
+    let (status, _) = app.call(Method::GET, "/v0/me", None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Requests without a token are still served; a bad token is refused everywhere.
+    assert_eq!(
+        app.call(Method::GET, "/v0/graphs", None).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        app.call_as(Some(&ann_token), Method::GET, "/v0/graphs", None)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    for bad in ["mw_0000", "not-a-token", ""] {
+        let (status, _) = app
+            .call_as(Some(bad), Method::GET, "/v0/graphs", None)
+            .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{bad}");
+    }
+    assert_eq!(
+        app.call(Method::GET, "/health", None).await.0,
+        StatusCode::OK
+    );
+
+    let tokens = auth::list_tokens(&mut app.graph, Some("Ann"))
+        .await
+        .unwrap();
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(
+        (tokens[0].id.as_str(), tokens[0].label.as_str()),
+        (ann_token_id.as_str(), "laptop")
+    );
+    assert_eq!(
+        auth::list_tokens(&mut app.graph, None).await.unwrap().len(),
+        3
+    );
+
+    // A merged duplicate's token now acts as the actor it was merged into.
+    let (status, _) = app
+        .call(
+            Method::POST,
+            &format!("/v0/actors/{}/merge", dup.id),
+            Some(json!({ "into": ann.id })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, body) = app
+        .call_as(Some(&dup_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(body["id"], json!(ann.id));
+
+    // Revoked and deleted actors' tokens stop working.
+    auth::revoke_token(&mut app.graph, &ann_token_id)
+        .await
+        .unwrap();
+    assert!(auth::revoke_token(&mut app.graph, &ann_token_id)
+        .await
+        .is_err());
+    let (status, _) = app
+        .call_as(Some(&ann_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    app.call(Method::DELETE, &format!("/v0/actors/{}", bob.id), None)
+        .await;
+    let (status, _) = app
+        .call_as(Some(&bob_token), Method::GET, "/v0/me", None)
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        auth::list_tokens(&mut app.graph, None).await.unwrap().len(),
+        1
+    );
 
     app.cleanup().await;
 }

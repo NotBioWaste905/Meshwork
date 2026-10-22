@@ -3,7 +3,7 @@
 
 use axum::{
     body::Bytes,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::{HeaderValue, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -16,6 +16,7 @@ use tower_http::{
 use tracing::info;
 use uuid::Uuid;
 
+pub mod auth;
 pub mod connection;
 mod db;
 pub mod error;
@@ -54,6 +55,7 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/health", get(health))
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/graphs", get(list_graphs))
+        .route("/v0/me", get(me))
         .route("/v0/actors", get(list_actors).post(add_actor))
         .route(
             "/v0/actors/:actor_id",
@@ -70,6 +72,11 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         )
         .route("/v0/:graph_id/connect_nodes/", post(connect_nodes))
         .route("/v0/:graph_id/disconnect_nodes/", post(disconnect_nodes))
+        // The last layer added runs first: the connection check, then the token lookup.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::identify,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             connection::ensure_connection_layer,
@@ -137,6 +144,19 @@ async fn edit_graph(
         db::rename_graph(&mut graph, &graph_id, name.trim()).await?;
     }
     Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
+}
+
+/// The actor the request's bearer token belongs to; 401 without a token.
+async fn me(
+    State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
+) -> Result<Json<Actor>> {
+    let actor = caller
+        .0
+        .ok_or_else(|| AppError::Unauthorized("No bearer token".to_string()))?;
+    let mut graph = state.graph.clone();
+    // fresh, so task_count is current
+    Ok(Json(db::get_actor(&mut graph, &actor.id).await?))
 }
 
 async fn list_actors(State(state): State<AppState>) -> Result<Json<Vec<Actor>>> {

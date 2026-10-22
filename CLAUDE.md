@@ -15,6 +15,8 @@ meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/main.rs                #   bootstrap: env, FalkorDB connection, server
   src/lib.rs                 #   router (app()), CORS, HTTP handlers
   src/connection.rs          #   FalkorDB client, per-request reconnect ping, index setup
+  src/auth.rs                #   actor bearer tokens: issue/list/revoke, request -> Caller
+  src/bin/meshwork-token.rs  #   CLI issuing tokens straight in FalkorDB
   src/db.rs                  #   all Cypher queries
   src/frontier.rs            #   ready_tasks: pure frontier logic + unit tests
   src/schemas.rs             #   API contract: Task, NewTask, TaskUpdate, Status
@@ -39,12 +41,14 @@ docker compose up -d --build        # frontend :3000, backend :8000, MCP :8080, 
 # backend (needs FalkorDB: docker compose up -d falkordb)
 cd meshwork/backend_rs
 FALKORDB_URL=falkor://localhost:6379 cargo run
+FALKORDB_URL=falkor://localhost:6379 cargo run --bin meshwork-token -- create <actor>  # API token
 cargo clippy --all-targets -- -D warnings && cargo fmt
 cargo test -- --include-ignored     # integration tests need FalkorDB on localhost:6379
 
 # MCP server (needs the backend on :8000)
 cd meshwork/mcp_rs
-MCP_TOKENS=dev-token cargo run      # :8080/mcp; for Claude Code: export MESHWORK_MCP_TOKEN=dev-token
+cargo run                           # :8080/mcp; clients send an actor token (see Auth)
+# Claude Code: export MESHWORK_MCP_TOKEN=$(docker compose exec -T backend meshwork-token create claude)
 cargo clippy --all-targets -- -D warnings && cargo fmt && cargo test
 
 # frontend
@@ -74,7 +78,16 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Task {id, name, description, status, tags: [string]})-[:PART_OF]->(:Graph)
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
+(:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
 ```
+
+**Auth.** Every `/v0/` request may carry `Authorization: Bearer mw_…`, an actor token; the
+backend resolves it to the calling actor (`auth::Caller` in the request extensions). No token →
+served as nobody (requiring one is the "Harden MCP and API token security" task); an unknown
+or malformed token → 401. Tokens are issued only by the `meshwork-token` CLI (`create <actor>
+[--label …]`, `list [actor]`, `revoke <id>`), never over HTTP; only hashes are stored. Merging
+actors moves their tokens, deleting an actor deletes them. The MCP server keeps no tokens: it
+checks the client's token with `GET /v0/me` and forwards it on every backend call.
 
 Actors are global (not per graph). `name` is unique and never equal to another actor's `id`, so
 task `users` resolve by id first, then by name. API-created actors get UUID ids; actors migrated
@@ -99,6 +112,7 @@ API (`/v0/...`):
 - `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,
   unknown → 404 (validated before any write)
+- `GET me` — the actor of the request's token, 401 without one
 - `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
   taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). `Actor` carries
   `task_count` (assigned tasks across all graphs).
@@ -108,7 +122,7 @@ API (`/v0/...`):
   created_by) must be moved by merge and handled by delete too.
 - `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
   dependency blocks dependee; on the canvas the edge goes dependency → dependee
-- Errors are `{message}` with 400/404/500; 409 when a new dependency would close a
+- Errors are `{message}` with 400/401/404/500; 409 when a new dependency would close a
   `DEPENDS_ON` cycle (the dependency graph is always a DAG).
 
 ## Gotchas

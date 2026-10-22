@@ -18,10 +18,9 @@ services:
   mcp:
     build: ./meshwork/mcp_rs
     environment:
+      # Clients authenticate with actor tokens checked by the backend; issue one with
+      # `docker compose exec -T backend meshwork-token create <actor>`.
       - BACKEND_URL=http://backend:8000
-      # Comma-separated bearer tokens. Set MCP_TOKENS before `docker compose up`
-      # for anything beyond local development.
-      - MCP_TOKENS=${MCP_TOKENS:-dev-token}
     ports:
       - "127.0.0.1:8080:8080" # loopback only: rmcp accepts only loopback Host headers by default
     depends_on:
