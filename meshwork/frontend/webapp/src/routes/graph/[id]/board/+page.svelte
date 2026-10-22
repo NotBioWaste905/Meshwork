@@ -42,6 +42,13 @@
 		<button
 			type="button"
 			class="chip"
+			aria-pressed={graphStore.filter === 'ready'}
+			style={graphStore.filter === 'ready' ? '' : 'color:var(--color-st-done-fg)'}
+			onclick={() => (graphStore.filter = 'ready')}>Ready · {graphStore.ready.size}</button
+		>
+		<button
+			type="button"
+			class="chip"
 			aria-pressed={graphStore.filter === 'blocked'}
 			onclick={() => (graphStore.filter = 'blocked')}>Blocked · {graphStore.blockedCount}</button
 		>
@@ -75,7 +82,9 @@
 							? 'bg-ink text-white'
 							: 'bg-surface text-ink'} {task.status === 'BLOCKED'
 							? 'border-danger-dot border-[1.5px]'
-							: 'border-line border'}"
+							: graphStore.ready.has(task.id)
+								? 'border-st-done-dot border-2'
+								: 'border-line border'}"
 					>
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2">

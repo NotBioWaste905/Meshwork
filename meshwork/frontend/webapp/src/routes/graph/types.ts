@@ -5,6 +5,8 @@ import type { Task } from '$lib/api';
 export type TaskNodeData = Task & {
 	/** Nothing depends on this task: it is a goal of the graph. */
 	terminal: boolean;
+	/** On the frontier: TODO with every blocker DONE, can be started now. */
+	ready: boolean;
 	/** Tagged `chore`: repeating work, drawn dashed. */
 	chore: boolean;
 	selected: boolean;

@@ -26,15 +26,17 @@
 			? '2px solid var(--color-accent)'
 			: blocked
 				? '1.5px solid var(--color-danger-dot)'
-				: data.chore
-					? '1.5px dashed var(--color-faint)'
-					: '1px solid var(--color-dot-grid)'
+				: data.ready
+					? '2px solid var(--color-st-done-dot)'
+					: data.chore
+						? '1.5px dashed var(--color-faint)'
+						: '1px solid var(--color-dot-grid)'
 	);
 </script>
 
 <div
 	bind:this={node}
-	title="Double-click to open"
+	title={data.ready ? 'Ready to start · double-click to open' : 'Double-click to open'}
 	class="task-node box-border h-[88px] w-40 rounded-xl p-2.5"
 	style="background:{data.terminal ? 'var(--color-ink)' : '#fff'};border:{border};opacity:{data.dim
 		? 0.3
