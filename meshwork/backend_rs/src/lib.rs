@@ -4,8 +4,8 @@
 use axum::{
     body::Bytes,
     extract::{Extension, Path, Query, State},
-    http::{HeaderValue, StatusCode},
-    routing::{get, post},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    routing::{delete, get, post},
     Json, Router,
 };
 use falkordb::AsyncGraph;
@@ -26,8 +26,8 @@ pub mod schemas;
 use error::{AppError, Result};
 use schemas::{
     Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    MergeActors, MessageResponse, NewActor, NewComment, NewGraph, NewTask, Status, Task,
-    TaskUpdate,
+    IssuedToken, MergeActors, MessageResponse, NewActor, NewComment, NewGraph, NewTask, NewToken,
+    OwnToken, Status, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -57,6 +57,8 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/graphs", get(list_graphs))
         .route("/v0/me", get(me))
+        .route("/v0/me/tokens", get(list_own_tokens).post(issue_own_token))
+        .route("/v0/me/tokens/:token_id", delete(revoke_own_token))
         .route("/v0/actors", get(list_actors).post(add_actor))
         .route(
             "/v0/actors/:actor_id",
@@ -163,6 +165,86 @@ async fn me(
     let mut graph = state.graph.clone();
     // fresh, so task_count is current
     Ok(Json(db::get_actor(&mut graph, &actor.id).await?))
+}
+
+/// The request's actor, or 401: the token endpoints act on the caller's own tokens only, so
+/// nobody can get a token for an identity they do not already hold.
+fn require_actor(caller: auth::Caller) -> Result<Actor> {
+    caller
+        .0
+        .ok_or_else(|| AppError::Unauthorized("Managing tokens needs a bearer token".to_string()))
+}
+
+const MAX_TOKEN_LABEL_CHARS: usize = 100;
+
+async fn list_own_tokens(
+    State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<OwnToken>>> {
+    let actor = require_actor(caller)?;
+    let mut graph = state.graph.clone();
+    let presented = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok());
+    let current = match auth::bearer_token(presented) {
+        Some(token) => db::token_id_by_hash(&mut graph, &auth::hash_token(token)).await?,
+        None => None,
+    };
+    let tokens = db::list_tokens(&mut graph, Some(&actor.id)).await?;
+    Ok(Json(
+        tokens
+            .into_iter()
+            .map(|info| OwnToken {
+                current: Some(&info.id) == current.as_ref(),
+                info,
+            })
+            .collect(),
+    ))
+}
+
+/// Issues the caller another token, e.g. for a second device or an agent acting as them.
+async fn issue_own_token(
+    State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
+    Json(request): Json<NewToken>,
+) -> Result<(StatusCode, Json<IssuedToken>)> {
+    let actor = require_actor(caller)?;
+    let label = request.label.trim();
+    if label.chars().count() > MAX_TOKEN_LABEL_CHARS {
+        return Err(AppError::BadRequest(format!(
+            "Token label is longer than {} characters",
+            MAX_TOKEN_LABEL_CHARS
+        )));
+    }
+    let mut graph = state.graph.clone();
+    let (token, id, _) = auth::issue_token(&mut graph, &actor.id, label).await?;
+    info!("Actor '{}' issued themselves token {}", actor.name, id);
+    let info = db::list_tokens(&mut graph, Some(&actor.id))
+        .await?
+        .into_iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| AppError::Internal(format!("Token {} vanished", id)))?;
+    Ok((StatusCode::CREATED, Json(IssuedToken { token, info })))
+}
+
+/// Revokes one of the caller's tokens; someone else's token is a 404, as if it did not exist.
+async fn revoke_own_token(
+    State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
+    Path(token_id): Path<String>,
+) -> Result<Json<MessageResponse>> {
+    let actor = require_actor(caller)?;
+    let mut graph = state.graph.clone();
+    let own = db::list_tokens(&mut graph, Some(&actor.id)).await?;
+    if !own.iter().any(|t| t.id == token_id) {
+        return Err(AppError::NotFound(format!("Token {} not found", token_id)));
+    }
+    auth::revoke_token(&mut graph, &token_id).await?;
+    info!("Actor '{}' revoked their token {}", actor.name, token_id);
+    Ok(Json(MessageResponse {
+        message: format!("Token {} revoked", token_id),
+    }))
 }
 
 async fn list_actors(State(state): State<AppState>) -> Result<Json<Vec<Actor>>> {

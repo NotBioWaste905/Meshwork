@@ -2,9 +2,10 @@
 //!
 //! A token is `mw_` + 64 hex characters (two v4 UUIDs, 244 random bits). Only its SHA-256 is
 //! stored, as `(:Token {hash})-[:OF]->(:Actor)`, so a database dump does not leak usable
-//! tokens; with that much entropy a plain hash is enough, no salt or slow KDF. Tokens are issued
-//! by the `meshwork-token` CLI, not over HTTP: there is no login, and while the API itself is
-//! open, an endpoint minting tokens would hand anyone any identity.
+//! tokens; with that much entropy a plain hash is enough, no salt or slow KDF. A first token is
+//! issued only by the `meshwork-token` CLI, never over HTTP: there is no login, and while the API
+//! itself is open, an endpoint minting tokens for anyone would hand out any identity. Over HTTP
+//! an actor can only manage its own tokens (`/v0/me/tokens`), which needs one of them already.
 //!
 //! Requests without a token are still served, as nobody (`Caller(None)`); requiring one is a
 //! separate step. A token that is presented but unknown or malformed is a 401.
@@ -90,17 +91,22 @@ pub async fn revoke_token(graph: &mut AsyncGraph, token_id: &str) -> Result<()> 
     }
 }
 
+/// The token of an `Authorization: Bearer mw_…` header value, if it looks like one.
+pub fn bearer_token(header: Option<&str>) -> Option<&str> {
+    header?
+        .strip_prefix("Bearer ")
+        .map(str::trim)
+        .filter(|t| t.starts_with(TOKEN_PREFIX))
+}
+
 /// The actor behind an `Authorization` header value: `None` without a header, 401 for anything
 /// but a known `Bearer` token.
 pub async fn authenticate(graph: &mut AsyncGraph, header: Option<&str>) -> Result<Option<Actor>> {
     let Some(value) = header else {
         return Ok(None);
     };
-    let token = value
-        .strip_prefix("Bearer ")
-        .map(str::trim)
-        .filter(|t| t.starts_with(TOKEN_PREFIX))
-        .ok_or_else(|| AppError::Unauthorized(NOT_A_TOKEN.to_string()))?;
+    let token =
+        bearer_token(Some(value)).ok_or_else(|| AppError::Unauthorized(NOT_A_TOKEN.to_string()))?;
     match db::actor_by_token_hash(graph, &hash_token(token)).await? {
         Some(actor) => Ok(Some(actor)),
         None => Err(AppError::Unauthorized(

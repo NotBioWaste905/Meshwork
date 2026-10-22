@@ -89,8 +89,10 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 **Auth.** Every `/v0/` request may carry `Authorization: Bearer mw_…`, an actor token; the
 backend resolves it to the calling actor (`auth::Caller` in the request extensions). No token →
 served as nobody (requiring one is the "Harden MCP and API token security" task); an unknown
-or malformed token → 401. Tokens are issued only by the `meshwork-token` CLI (`create <actor>
-[--label …]`, `list [actor]`, `revoke <id>`), never over HTTP; only hashes are stored. Merging
+or malformed token → 401. A first token is issued only by the `meshwork-token` CLI (`create <actor>
+[--label …]`, `list [actor]`, `revoke <id>`), never over HTTP; only hashes are stored. Over HTTP
+an actor manages only its own tokens (`/v0/me/tokens`, token required), so nobody gets an
+identity they do not already hold. Merging
 actors moves their tokens, deleting an actor deletes them. The MCP server keeps no tokens: it
 checks the client's token with `GET /v0/me` and forwards it on every backend call.
 
@@ -128,6 +130,9 @@ API (`/v0/...`):
   the token's actor (none without a token); on update `""` removes it. Merging actors moves it,
   deleting the actor removes it.
 - `GET me` — the actor of the request's token, 401 without one
+- `GET me/tokens` — the caller's tokens (`TokenInfo` + `current`: the one in use); `POST
+  me/tokens` with `{label?}` → 201 `{token, info}`, the token shown once; `DELETE
+  me/tokens/:id` revokes one of the caller's tokens (anyone else's → 404). All 401 without a token.
 - `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
   taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). `Actor` carries
   `task_count` (assigned tasks across all graphs).
