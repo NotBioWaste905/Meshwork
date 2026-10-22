@@ -15,6 +15,8 @@
 	let priority = $state<Priority>(Priority.NORMAL);
 	/** Actor ID, '' for unassigned. */
 	let assignee = $state('');
+	/** Actor ID, '' for nobody. (The API would default to the token's actor; the UI sends none yet.) */
+	let reporter = $state('');
 	let blockers = $state<string[]>([]);
 	let tags = $state<string[]>([]);
 	let search = $state('');
@@ -42,6 +44,7 @@
 			status = Status.TODO;
 			priority = Priority.NORMAL;
 			assignee = '';
+			reporter = '';
 			blockers = [];
 			tags = [];
 			search = '';
@@ -73,6 +76,7 @@
 			priority,
 			tags: allTags,
 			users: assignee ? [assignee] : [],
+			reporter: reporter || undefined,
 			depends_on: blockers
 		});
 		saving = false;
@@ -179,11 +183,24 @@
 					</div>
 					<div class="flex min-w-0 flex-col gap-1.5">
 						<label for="nt-assignee" class="text-sm font-medium">Assignee</label>
-						<AssigneePicker
-							id="nt-assignee"
-							value={assignee}
-							onchange={(actorId) => (assignee = actorId)}
-						/>
+						<div class="flex">
+							<AssigneePicker
+								id="nt-assignee"
+								value={assignee}
+								onchange={(actorId) => (assignee = actorId)}
+							/>
+						</div>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label for="nt-reporter" class="text-sm font-medium">Reporter</label>
+						<div class="flex">
+							<AssigneePicker
+								id="nt-reporter"
+								emptyLabel="Nobody"
+								value={reporter}
+								onchange={(actorId) => (reporter = actorId)}
+							/>
+						</div>
 					</div>
 				</div>
 

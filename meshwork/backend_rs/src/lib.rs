@@ -267,6 +267,7 @@ async fn merge_actor(
 async fn add_task(
     State(state): State<AppState>,
     Path(graph_id): Path<String>,
+    Extension(caller): Extension<auth::Caller>,
     Json(task): Json<NewTask>,
 ) -> Result<(StatusCode, Json<Task>)> {
     if task.name.trim().is_empty() {
@@ -280,12 +281,18 @@ async fn add_task(
     db::ensure_graph(&mut graph, &graph_id).await?;
     db::ensure_tasks_in_graph(&mut graph, &graph_id, &task.depends_on).await?;
     let users = db::resolve_actors(&mut graph, &task.users).await?;
+    // The author reports the task unless someone else is named.
+    let reporter = match task.reporter.as_deref().filter(|r| !r.is_empty()) {
+        Some(r) => Some(resolve_actor(&mut graph, r).await?),
+        None => caller.0.map(|actor| actor.id),
+    };
 
     let id = Uuid::new_v4().to_string();
     info!("Adding task '{}' to graph '{}'", id, graph_id);
     db::create_task(&mut graph, &graph_id, &id, &task).await?;
     db::set_dependencies(&mut graph, &id, &task.depends_on).await?;
     db::set_users(&mut graph, &id, &users).await?;
+    db::set_reporter(&mut graph, &id, reporter.as_deref()).await?;
 
     let created = db::get_task(&mut graph, &graph_id, &id).await?;
     Ok((StatusCode::CREATED, Json(created)))
@@ -356,6 +363,12 @@ async fn edit_task(
         Some(refs) => Some(db::resolve_actors(&mut graph, refs).await?),
         None => None,
     };
+    // Some(None): remove the reporter.
+    let reporter = match update.reporter.as_deref() {
+        Some("") => Some(None),
+        Some(r) => Some(Some(resolve_actor(&mut graph, r).await?)),
+        None => None,
+    };
 
     db::update_task_props(&mut graph, &task_id, &update).await?;
     if let Some(deps) = &update.depends_on {
@@ -364,8 +377,18 @@ async fn edit_task(
     if let Some(users) = &users {
         db::set_users(&mut graph, &task_id, users).await?;
     }
+    if let Some(reporter) = &reporter {
+        db::set_reporter(&mut graph, &task_id, reporter.as_deref()).await?;
+    }
 
     Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
+}
+
+/// One actor by ID or name; 404 if there is none.
+async fn resolve_actor(graph: &mut AsyncGraph, actor: &str) -> Result<String> {
+    Ok(db::resolve_actors(graph, &[actor.to_string()])
+        .await?
+        .remove(0))
 }
 
 /// A PR link is shown as a clickable link, so only `http(s)` URLs (or nothing) are accepted.

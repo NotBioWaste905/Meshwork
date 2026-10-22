@@ -1084,6 +1084,100 @@ async fn bearer_tokens_identify_actors() {
 
 #[tokio::test]
 #[ignore = "needs FalkorDB"]
+async fn task_reporter() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    let bob = app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+    let add = format!("/v0/{graph_id}/task/add/");
+
+    // The author is the reporter by default; without a token there is none.
+    let (status, body) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &add,
+            Some(json!({ "name": "A" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["reporter"], json!(ann.id));
+    let task: Task = serde_json::from_value(body).unwrap();
+    let anon = app.add_task(&graph_id, json!({ "name": "B" })).await;
+    assert_eq!(anon.reporter, None);
+
+    // Named explicitly, by name or ID.
+    let (status, body) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &add,
+            Some(json!({ "name": "C", "reporter": "bob" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["reporter"], json!(bob.id));
+    let (status, _) = app
+        .call(
+            Method::POST,
+            &add,
+            Some(json!({ "name": "D", "reporter": "nobody" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Changed, kept by unrelated edits, removed with "".
+    let uri = format!("/v0/{graph_id}/task/{}", task.id);
+    let (_, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "reporter": bob.id })))
+        .await;
+    assert_eq!(body["reporter"], json!(bob.id));
+    let (_, body) = app
+        .call(
+            Method::PUT,
+            &uri,
+            Some(json!({ "status": "REVIEW", "reporter": null })),
+        )
+        .await;
+    assert_eq!(body["reporter"], json!(bob.id));
+    let (status, _) = app
+        .call(Method::PUT, &uri, Some(json!({ "reporter": "nobody" })))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, body) = app
+        .call(Method::PUT, &uri, Some(json!({ "reporter": "" })))
+        .await;
+    assert_eq!(body["reporter"], Value::Null);
+
+    // Merging moves reported tasks; deleting leaves them without a reporter.
+    app.call(Method::PUT, &uri, Some(json!({ "reporter": "bob" })))
+        .await;
+    let (status, body) = app
+        .call(
+            Method::POST,
+            &format!("/v0/actors/{}/merge", bob.id),
+            Some(json!({ "into": "ann" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let reporter_of =
+        |tasks: &[Task], id: &str| tasks.iter().find(|t| t.id == id).unwrap().reporter.clone();
+    assert_eq!(
+        reporter_of(&app.all_tasks(&graph_id).await, &task.id),
+        Some(ann.id.clone())
+    );
+    let (status, body) = app
+        .call(Method::DELETE, &format!("/v0/actors/{}", ann.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(reporter_of(&app.all_tasks(&graph_id).await, &task.id), None);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
 async fn free_text_users_migrate_to_actors() {
     let mut app = TestApp::new().await;
     let graph_id = app.create_graph().await;
