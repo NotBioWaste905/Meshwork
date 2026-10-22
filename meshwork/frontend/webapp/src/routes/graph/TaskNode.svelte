@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import PriorityMark from '$lib/components/PriorityMark.svelte';
@@ -6,7 +7,18 @@
 	import { Status } from '$lib/api';
 	import type { TaskFlowNode } from './types';
 
-	let { data }: NodeProps<TaskFlowNode> = $props();
+	let { id, data }: NodeProps<TaskFlowNode> = $props();
+
+	// Double click opens the task. Listened to on the element itself: Svelte 5 delegates
+	// `ondblclick` to the root, and the canvas (d3-zoom) stops double clicks before they get there.
+	let node = $state<HTMLDivElement>();
+	$effect(() => {
+		const el = node;
+		if (!el) return;
+		const open = () => goto(`/graph/${data.graph_id}/task/${id}`);
+		el.addEventListener('dblclick', open);
+		return () => el.removeEventListener('dblclick', open);
+	});
 
 	let blocked = $derived(data.status === Status.BLOCKED);
 	let border = $derived(
@@ -21,6 +33,8 @@
 </script>
 
 <div
+	bind:this={node}
+	title="Double-click to open"
 	class="task-node box-border h-[88px] w-40 rounded-xl p-2.5"
 	style="background:{data.terminal ? 'var(--color-ink)' : '#fff'};border:{border};opacity:{data.dim
 		? 0.3
