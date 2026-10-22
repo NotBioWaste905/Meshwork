@@ -25,7 +25,7 @@ pub mod schemas;
 use error::{AppError, Result};
 use schemas::{
     Actor, ActorUpdate, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
-    MessageResponse, NewActor, NewGraph, NewTask, Task, TaskUpdate,
+    MergeActors, MessageResponse, NewActor, NewGraph, NewTask, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -55,7 +55,11 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/graphs", get(list_graphs))
         .route("/v0/actors", get(list_actors).post(add_actor))
-        .route("/v0/actors/:actor_id", get(get_actor).put(edit_actor))
+        .route(
+            "/v0/actors/:actor_id",
+            get(get_actor).put(edit_actor).delete(delete_actor),
+        )
+        .route("/v0/actors/:actor_id/merge", post(merge_actor))
         .route("/v0/:graph_id", get(get_graph).put(edit_graph))
         .route("/v0/:graph_id/task/add/", post(add_task))
         .route("/v0/:graph_id/all_tasks", get(get_all_tasks))
@@ -188,6 +192,56 @@ async fn edit_actor(
     info!("Editing actor '{}'", actor_id);
     db::update_actor(&mut graph, &actor_id, name, update.kind).await?;
     Ok(Json(db::get_actor(&mut graph, &actor_id).await?))
+}
+
+#[derive(serde::Deserialize)]
+struct DeleteActorQuery {
+    #[serde(default)]
+    unassign: bool,
+}
+
+/// Deletes an actor. An actor still assigned to tasks is a 409 unless `?unassign=true`, which
+/// drops those assignments; to hand the tasks to someone else, merge instead.
+async fn delete_actor(
+    State(state): State<AppState>,
+    Path(actor_id): Path<String>,
+    Query(query): Query<DeleteActorQuery>,
+) -> Result<Json<MessageResponse>> {
+    let mut graph = state.graph.clone();
+    let actor = db::get_actor(&mut graph, &actor_id).await?;
+    if actor.task_count > 0 && !query.unassign {
+        return Err(AppError::Conflict(format!(
+            "Actor '{}' is assigned to {} task(s); pass ?unassign=true or merge the actor",
+            actor.name, actor.task_count
+        )));
+    }
+    info!("Deleting actor '{}' ({})", actor_id, actor.name);
+    db::delete_actor(&mut graph, &actor_id).await?;
+    Ok(Json(MessageResponse {
+        message: format!("Actor {} deleted", actor_id),
+    }))
+}
+
+/// Merges a duplicate into another actor: its tasks move over and it is deleted. Returns the
+/// actor that stays.
+async fn merge_actor(
+    State(state): State<AppState>,
+    Path(actor_id): Path<String>,
+    Json(request): Json<MergeActors>,
+) -> Result<Json<Actor>> {
+    let mut graph = state.graph.clone();
+    db::get_actor(&mut graph, &actor_id).await?;
+    let into = db::resolve_actors(&mut graph, std::slice::from_ref(&request.into))
+        .await?
+        .remove(0);
+    if into == actor_id {
+        return Err(AppError::BadRequest(
+            "An actor cannot be merged into itself".to_string(),
+        ));
+    }
+    info!("Merging actor '{}' into '{}'", actor_id, into);
+    db::merge_actor(&mut graph, &actor_id, &into).await?;
+    Ok(Json(db::get_actor(&mut graph, &into).await?))
 }
 
 async fn add_task(

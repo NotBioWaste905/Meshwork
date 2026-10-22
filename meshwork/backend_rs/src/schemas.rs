@@ -157,6 +157,8 @@ pub struct Actor {
     /// name an actor by either.
     pub name: String,
     pub kind: ActorKind,
+    /// Number of tasks assigned to the actor, across all graphs.
+    pub task_count: i64,
 }
 
 /// Request body for creating an actor.
@@ -172,4 +174,11 @@ pub struct NewActor {
 pub struct ActorUpdate {
     pub name: Option<String>,
     pub kind: Option<ActorKind>,
+}
+
+/// Request body for merging an actor into another one.
+#[derive(Deserialize, Debug)]
+pub struct MergeActors {
+    /// The actor that stays, by ID or by name.
+    pub into: String,
 }

@@ -3,6 +3,7 @@
 
 	let path = $derived(page.url.pathname);
 	let onGraphs = $derived(path.startsWith('/graph'));
+	let onActors = $derived(path.startsWith('/actors'));
 
 	const item = 'flex size-11 items-center justify-center rounded-[10px]';
 </script>
@@ -65,6 +66,27 @@
 				height="7"
 				rx="1.5"
 			/>
+		</svg>
+	</a>
+	<a
+		href="/actors"
+		aria-label="Actors"
+		aria-current={onActors ? 'page' : undefined}
+		class="{item} {onActors ? 'bg-rail-active text-white' : 'text-rail-ink hover:text-white'}"
+	>
+		<svg
+			width="22"
+			height="22"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.8"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
+			<circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+			<path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.4c1.9.8 3 2.9 3 5.6" />
 		</svg>
 	</a>
 </nav>

@@ -24,6 +24,7 @@ meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyfl
   src/lib/api.ts             #   the only HTTP client, mirrors schemas.rs
   src/lib/graphStore.svelte.ts #  tasks of the open graph, shared by all graph screens
   src/routes/graphs/         #   graph list (GET /v0/graphs); new/: create a named graph
+  src/routes/actors/         #   actor list: add, rename, kind, merge duplicates, delete
   src/routes/graph/          #   +page.svelte: redirect to last/new graph
                              #   [id]/: graph view, board/, table/, task/[taskId]/
 meshwork/mcp_rs/             # MCP server for AI agents (rmcp, axum 0.8), thin REST client of the backend
@@ -99,7 +100,12 @@ API (`/v0/...`):
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,
   unknown → 404 (validated before any write)
 - `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
-  taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). No delete yet.
+  taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). `Actor` carries
+  `task_count` (assigned tasks across all graphs).
+- `DELETE actors/:id[?unassign=true]` — 409 while the actor has tasks, unless `unassign` drops
+  those assignments; `POST actors/:id/merge` with `{into}` (id or name) moves the tasks to `into`
+  and deletes the actor, returns `into`. Future references to actors (reporter, tokens,
+  created_by) must be moved by merge and handled by delete too.
 - `POST :graph/connect_nodes/`, `disconnect_nodes/` with `{node_dependency, node_dependee}` —
   dependency blocks dependee; on the canvas the edge goes dependency → dependee
 - Errors are `{message}` with 400/404/500; 409 when a new dependency would close a
