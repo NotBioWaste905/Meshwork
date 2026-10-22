@@ -15,8 +15,10 @@ status in the graph is the truth.
   ends up blocking it directly or through other tasks.
 - UI: http://localhost:3000/graph/3ea37679-5d8d-4cec-b282-07aff4a76628
 - Tools: `mcp__meshwork__*`. If they are missing, the server is not connected (needs
-  `MESHWORK_MCP_TOKEN` in the app's environment and the compose stack up) — tell the user,
-  don't fall back to editing TODO.md. The REST API on :8000 is a last resort for bulk edits.
+  `MESHWORK_MCP_TOKEN` in the app's environment and the compose stack up). A 401 in the
+  connection error names the cause; point the user to `scripts/mcp-token.sh` and the MCP section
+  of docs/operations.md (restart needed; the desktop app reads launchd's env, not the shell's).
+  Don't fall back to editing TODO.md. The REST API on :8000 is a last resort for bulk edits.
 
 ## Conventions in the graph
 

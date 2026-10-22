@@ -35,7 +35,9 @@ request and puts a `Caller` — a `Backend` client carrying that token, plus the
 request; tools take `caller: Caller` and make all backend calls through `caller.backend`, so the
 backend sees who acts. There is no shared anonymous client in the tools.
 
-Connecting from Claude Code: root `.mcp.json`, token in `MESHWORK_MCP_TOKEN`.
+Connecting from Claude Code: root `.mcp.json`, token in `MESHWORK_MCP_TOKEN` (issue it with
+`scripts/mcp-token.sh`; setup and its pitfalls are in `docs/operations.md`). A bearer value without
+the `mw_` prefix is refused here with a message naming the usual mistake, a token id.
 
 ## Rules
 

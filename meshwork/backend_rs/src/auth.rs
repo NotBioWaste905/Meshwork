@@ -28,6 +28,12 @@ use crate::{
 
 const TOKEN_PREFIX: &str = "mw_";
 
+/// 401 text for a bearer value that is not a token at all. The usual mistake is passing the
+/// token's id (a UUID, as `meshwork-token list` prints it) instead of the token.
+pub const NOT_A_TOKEN: &str = "Not a Meshwork token: tokens start with 'mw_'. \
+     A token id (a UUID, as `meshwork-token list` shows) is not the token; \
+     issue a new one with `meshwork-token create <actor>`";
+
 /// The actor a request comes from, put into the request extensions by [`identify`].
 #[derive(Clone, Debug)]
 pub struct Caller(pub Option<Actor>);
@@ -94,11 +100,12 @@ pub async fn authenticate(graph: &mut AsyncGraph, header: Option<&str>) -> Resul
         .strip_prefix("Bearer ")
         .map(str::trim)
         .filter(|t| t.starts_with(TOKEN_PREFIX))
-        .ok_or_else(|| AppError::Unauthorized("Expected 'Bearer mw_…' token".to_string()))?;
+        .ok_or_else(|| AppError::Unauthorized(NOT_A_TOKEN.to_string()))?;
     match db::actor_by_token_hash(graph, &hash_token(token)).await? {
         Some(actor) => Ok(Some(actor)),
         None => Err(AppError::Unauthorized(
-            "Unknown or revoked token".to_string(),
+            "Unknown or revoked token; issue a new one with `meshwork-token create <actor>`"
+                .to_string(),
         )),
     }
 }

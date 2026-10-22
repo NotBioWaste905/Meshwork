@@ -36,6 +36,9 @@ impl<C: AsRequestContext> FromContextPart<C> for Caller {
     }
 }
 
+/// Every actor token starts with this; checked here so a wrong value fails with a clear message.
+const TOKEN_PREFIX: &str = "mw_";
+
 /// The token of an `Authorization: Bearer <token>` header value.
 pub fn bearer(header_value: Option<&str>) -> Option<&str> {
     header_value
@@ -63,15 +66,24 @@ pub async fn require_actor(
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok());
     let Some(token) = bearer(presented) else {
-        return unauthorized("missing bearer token");
+        return unauthorized("missing bearer token: send 'Authorization: Bearer mw_…'");
     };
+    if !token.starts_with(TOKEN_PREFIX) {
+        return unauthorized(
+            "not a Meshwork token: tokens start with 'mw_'. A token id (a UUID, as \
+             `meshwork-token list` shows) is not the token; issue a new one with \
+             `meshwork-token create <actor>`",
+        );
+    }
     let backend = backend.with_token(token);
     match backend.me().await {
         Ok(Some(actor)) => {
             req.extensions_mut().insert(Caller { backend, actor });
             next.run(req).await
         }
-        Ok(None) => unauthorized("unknown or revoked token"),
+        Ok(None) => unauthorized(
+            "unknown or revoked token; issue a new one with `meshwork-token create <actor>`",
+        ),
         Err(e) => {
             tracing::warn!("cannot check token: {e}");
             (StatusCode::BAD_GATEWAY, "cannot reach the Meshwork backend").into_response()

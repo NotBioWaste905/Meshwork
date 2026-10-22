@@ -77,7 +77,8 @@ async fn main() {
             .await
             .map(|(token, id, actor)| {
                 eprintln!(
-                    "Token {id} for {} ({}). Shown once, store it now:",
+                    "Issued a token for {} ({}); its id, for `revoke`, is {id}.\n\
+                     The token is the mw_… line below (not the id). It is shown once, store it now:",
                     actor.name, actor.id
                 );
                 println!("{token}");
