@@ -20,7 +20,7 @@ meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/schemas.rs             #   API contract: Task, NewTask, TaskUpdate, Status
   src/error.rs               #   AppError -> HTTP response
   tests/api.rs               #   integration tests against a live FalkorDB
-meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre
+meshwork/frontend/webapp/    # SvelteKit 2 + Svelte 5 (runes), Tailwind 4, @xyflow/svelte + dagre, marked + DOMPurify
   src/lib/api.ts             #   the only HTTP client, mirrors schemas.rs
   src/lib/graphStore.svelte.ts #  tasks of the open graph, shared by all graph screens
   src/routes/graphs/         #   graph list (GET /v0/graphs); new/: create a named graph

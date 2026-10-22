@@ -4,6 +4,7 @@
 	import { Status, type Task } from '$lib/api';
 	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import AssigneePicker from '$lib/components/AssigneePicker.svelte';
+	import Markdown from '$lib/components/Markdown.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
@@ -172,7 +173,9 @@
 							<input id="e-name" class="field" required bind:value={editName} />
 						</div>
 						<div class="flex flex-col gap-1.5">
-							<label for="e-desc" class="text-sm font-medium">Description</label>
+							<label for="e-desc" class="text-sm font-medium"
+								>Description <span class="text-muted font-normal">(Markdown)</span></label
+							>
 							<textarea id="e-desc" rows="5" class="field" bind:value={editDescription}></textarea>
 						</div>
 						<div class="flex flex-col gap-1.5">
@@ -202,9 +205,7 @@
 						</div>
 						<h1 class="m-0 text-[32px] leading-tight font-semibold tracking-tight">{task.name}</h1>
 						{#if task.description}
-							<p class="text-ink-2 m-0 max-w-[68ch] text-base leading-relaxed whitespace-pre-line">
-								{task.description}
-							</p>
+							<Markdown source={task.description} class="max-w-[68ch]" />
 						{/if}
 						{#if task.tags.length > 0}
 							<div class="flex flex-wrap gap-2">
