@@ -11,7 +11,7 @@ use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
 use crate::schemas::{
-    Actor, ActorKind, GraphInfo, NewTask, Priority, Status, Task, TaskUpdate, TokenInfo,
+    Actor, ActorKind, Comment, GraphInfo, NewTask, Priority, Status, Task, TaskUpdate, TokenInfo,
 };
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
@@ -462,14 +462,71 @@ pub async fn set_reporter(
     Ok(())
 }
 
+/// Deletes the task with its edges and its comments.
 pub async fn delete_task(graph: &mut AsyncGraph, task_id: &str) -> Result<()> {
     graph
-        .query("MATCH (t:Task {id: $id}) DETACH DELETE t")
+        .query(
+            "MATCH (t:Task {id: $id}) \
+             OPTIONAL MATCH (c:Comment)-[:ON]->(t) \
+             DETACH DELETE c, t",
+        )
         .with_param("id", task_id)
         .execute()
         .await
         .map_err(db_err)?;
     Ok(())
+}
+
+/// Stores a comment as `(:Comment {id, body, created_at})-[:ON]->(:Task)` with
+/// `(:Comment)-[:BY]->(:Actor)`.
+pub async fn add_comment(
+    graph: &mut AsyncGraph,
+    task_id: &str,
+    comment_id: &str,
+    body: &str,
+    author_id: &str,
+) -> Result<()> {
+    graph
+        .query(
+            "MATCH (t:Task {id: $task}), (a:Actor {id: $author}) \
+             CREATE (c:Comment {id: $id, body: $body, created_at: timestamp()})-[:ON]->(t), \
+                    (c)-[:BY]->(a)",
+        )
+        .with_param("task", task_id)
+        .with_param("author", author_id)
+        .with_param("id", comment_id)
+        .with_param("body", body)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// The task's comments, oldest first.
+pub async fn list_comments(graph: &mut AsyncGraph, task_id: &str) -> Result<Vec<Comment>> {
+    let result = graph
+        .query(
+            "MATCH (c:Comment)-[:ON]->(:Task {id: $task}) \
+             OPTIONAL MATCH (c)-[:BY]->(a:Actor) \
+             RETURN c.id AS id, c.body AS body, c.created_at AS created_at, a.id AS author \
+             ORDER BY created_at, id",
+        )
+        .with_param("task", task_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(|row| {
+            Ok(Comment {
+                id: row.try_get("id").map_err(db_err)?,
+                body: row.try_get("body").map_err(db_err)?,
+                author: row.try_get("author").map_err(db_err)?,
+                created_at: row.try_get("created_at").map_err(db_err)?,
+            })
+        })
+        .collect()
 }
 
 pub async fn connect(graph: &mut AsyncGraph, dependee: &str, dependency: &str) -> Result<()> {
@@ -627,7 +684,7 @@ pub async fn update_actor(
 }
 
 /// Deletes the actor together with its `ASSIGNED_TO` and `REPORTED_BY` edges (the tasks it
-/// reported are left without a reporter) and its tokens.
+/// reported are left without a reporter) and its tokens. Its comments stay, without an author.
 pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> {
     graph
         .query(
@@ -642,8 +699,8 @@ pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Moves the tasks assigned to or reported by `from` and its tokens over to `into`, then deletes
-/// `from`. A task assigned to both keeps one edge; a token of the duplicate now acts as `into`.
+/// Moves the tasks assigned to or reported by `from`, its comments and its tokens over to
+/// `into`, then deletes `from`. A task assigned to both keeps one edge; a token of the duplicate now acts as `into`.
 /// If interrupted between the queries, `from` is still there and the merge can simply be
 /// repeated.
 pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Result<()> {
@@ -663,6 +720,18 @@ pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Resu
             "MATCH (t:Task)-[r:REPORTED_BY]->(:Actor {id: $from}) \
              MATCH (d:Actor {id: $into}) \
              CREATE (t)-[:REPORTED_BY]->(d) \
+             DELETE r",
+        )
+        .with_param("from", from)
+        .with_param("into", into)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    graph
+        .query(
+            "MATCH (c:Comment)-[r:BY]->(:Actor {id: $from}) \
+             MATCH (d:Actor {id: $into}) \
+             CREATE (c)-[:BY]->(d) \
              DELETE r",
         )
         .with_param("from", from)

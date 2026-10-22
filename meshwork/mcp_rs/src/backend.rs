@@ -4,7 +4,7 @@ use reqwest::{Client, Method, RequestBuilder, StatusCode};
 use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 
-use crate::model::{Actor, GraphInfo, NewActor, NewTask, Task, TaskUpdate};
+use crate::model::{Actor, Comment, GraphInfo, NewActor, NewTask, Task, TaskUpdate};
 
 /// A backend client. [`Backend::new`] makes anonymous requests; [`Backend::with_token`] gives a
 /// client that acts as the token's actor.
@@ -163,6 +163,24 @@ impl Backend {
     ) -> Result<(), String> {
         self.edge(graph, "disconnect_nodes/", blocker, blocked)
             .await
+    }
+
+    pub async fn list_comments(&self, graph: &str, task: &str) -> Result<Vec<Comment>, String> {
+        self.send(self.req(Method::GET, &format!("{graph}/task/{task}/comments")))
+            .await
+    }
+
+    pub async fn add_comment(
+        &self,
+        graph: &str,
+        task: &str,
+        body: &str,
+    ) -> Result<Comment, String> {
+        self.send(
+            self.req(Method::POST, &format!("{graph}/task/{task}/comments"))
+                .json(&json!({ "body": body })),
+        )
+        .await
     }
 
     async fn edge(

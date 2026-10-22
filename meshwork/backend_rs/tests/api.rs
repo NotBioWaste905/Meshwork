@@ -1347,3 +1347,127 @@ async fn free_text_users_migrate_to_actors() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn task_comments() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    let bob = app.add_actor(json!({ "name": "bob" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+    let (bob_token, _, _) = auth::issue_token(&mut app.graph, "bob", "").await.unwrap();
+    let task = app
+        .add_task(&graph_id, json!({ "name": "Talk about me" }))
+        .await;
+    let uri = format!("/v0/{graph_id}/task/{}/comments", task.id);
+
+    let (status, body) = app.call(Method::GET, &uri, None).await;
+    assert_eq!((status, body), (StatusCode::OK, json!([])));
+
+    // The author is the token's actor; no token, no comment.
+    let (status, _) = app
+        .call(Method::POST, &uri, Some(json!({ "body": "hi" })))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    for bad in ["", "   ", &"x".repeat(20_001)] {
+        let (status, _) = app
+            .call_as(
+                Some(&ann_token),
+                Method::POST,
+                &uri,
+                Some(json!({ "body": bad })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    let (status, first) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &uri,
+            Some(json!({ "body": "  Started, see **PR** \n" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    assert_eq!(first["body"], "Started, see **PR**");
+    assert_eq!(first["author"], json!(ann.id));
+    assert!(first["created_at"].as_i64().unwrap() > 0);
+    let (status, _) = app
+        .call_as(
+            Some(&bob_token),
+            Method::POST,
+            &uri,
+            Some(json!({ "body": "Thanks" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    // Oldest first.
+    let (_, body) = app.call(Method::GET, &uri, None).await;
+    let authors: Vec<&Value> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| &c["author"])
+        .collect();
+    assert_eq!(authors, vec![&json!(ann.id), &json!(bob.id)]);
+
+    // Unknown task, or a task of another graph: 404.
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &format!("/v0/{graph_id}/task/nope/comments"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let other = app.create_graph().await;
+    let (status, _) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            &format!("/v0/{other}/task/{}/comments", task.id),
+            Some(json!({ "body": "wrong graph" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Merging moves authorship; deleting the author keeps the comment without one.
+    app.call(
+        Method::POST,
+        &format!("/v0/actors/{}/merge", bob.id),
+        Some(json!({ "into": "ann" })),
+    )
+    .await;
+    let (_, body) = app.call(Method::GET, &uri, None).await;
+    assert_eq!(body[1]["author"], json!(ann.id));
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/actors/{}", ann.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, body) = app.call(Method::GET, &uri, None).await;
+    assert_eq!(body.as_array().unwrap().len(), 2);
+    assert_eq!(body[0]["author"], Value::Null);
+
+    // Deleting the task deletes its comments.
+    app.call(
+        Method::DELETE,
+        &format!("/v0/{graph_id}/task/{}", task.id),
+        None,
+    )
+    .await;
+    let mut result = app
+        .graph
+        .query("MATCH (c:Comment) RETURN count(c) AS n")
+        .execute()
+        .await
+        .unwrap();
+    let row = futures::StreamExt::next(&mut result.data)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("n").unwrap(), 0);
+
+    app.cleanup().await;
+}

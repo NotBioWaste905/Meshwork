@@ -114,6 +114,16 @@ pub struct UpdateTaskArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct CommentArgs {
+    /// Graph ID (UUID).
+    pub graph_id: String,
+    /// Task ID (UUID).
+    pub task_id: String,
+    /// The comment, Markdown. Signed as you.
+    pub body: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct LinkArgs {
     /// Graph ID (UUID).
     pub graph_id: String,
@@ -345,6 +355,38 @@ impl Meshwork {
             .await
             .map(|()| json!({ "unlinked": { "blocker": a.blocker_id, "blocked": a.blocked_id } }));
         respond(res)
+    }
+
+    #[tool(
+        description = "Read a task's comments, oldest first: notes, questions and hand-offs left by \
+                       people and agents. Check them before starting or continuing a task.",
+        annotations(read_only_hint = true)
+    )]
+    async fn list_comments(
+        &self,
+        caller: Caller,
+        Parameters(a): Parameters<TaskArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        respond(caller.backend.list_comments(&a.graph_id, &a.task_id).await)
+    }
+
+    #[tool(
+        description = "Leave a comment on a task, signed as you: progress notes, a question for \
+                       the reporter, or what the next person needs when you hand work over. \
+                       Keep the task's description for what to do; comments are the conversation.",
+        annotations(read_only_hint = false)
+    )]
+    async fn add_comment(
+        &self,
+        caller: Caller,
+        Parameters(a): Parameters<CommentArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        respond(
+            caller
+                .backend
+                .add_comment(&a.graph_id, &a.task_id, &a.body)
+                .await,
+        )
     }
 }
 
