@@ -13,7 +13,7 @@ import { mergeById } from './liveRefresh';
 import { session } from './session.svelte';
 import { shortId } from './status';
 
-export type TaskFilter = 'all' | 'mine' | 'blocked';
+export type TaskFilter = 'all' | 'mine' | 'ready' | 'blocked';
 
 /** The tasks of the open graph, shared by the Graph, Board, Table and Task screens. */
 class GraphStore {
@@ -79,6 +79,18 @@ class GraphStore {
 
 	doneCount = $derived(this.tasks.filter((t) => t.status === Status.DONE).length);
 	blockedCount = $derived(this.tasks.filter((t) => t.status === Status.BLOCKED).length);
+	/** The frontier, as GET ready_tasks has it: TODO tasks whose blockers are all DONE. */
+	ready = $derived(
+		new Set(
+			this.tasks
+				.filter(
+					(t) =>
+						t.status === Status.TODO &&
+						t.depends_on.every((id) => this.byId.get(id)?.status === Status.DONE)
+				)
+				.map((t) => t.id)
+		)
+	);
 	/** Tasks assigned to the signed-in actor; 0 when signed out. */
 	mineCount = $derived(this.tasks.filter((t) => isMine(t)).length);
 
@@ -86,6 +98,7 @@ class GraphStore {
 
 	matches(task: Task): boolean {
 		if (this.filter === 'blocked') return task.status === Status.BLOCKED;
+		if (this.filter === 'ready') return this.ready.has(task.id);
 		// signed out meanwhile: show everything rather than nothing
 		if (this.filter === 'mine' && session.me) return isMine(task);
 		return true;

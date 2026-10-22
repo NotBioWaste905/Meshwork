@@ -58,6 +58,7 @@
 	let chips = $derived<{ id: TaskFilter; label: string; count: number }[]>([
 		{ id: 'all', label: 'All tasks', count: graphStore.tasks.length },
 		...(session.me ? [{ id: 'mine' as const, label: 'Mine', count: graphStore.mineCount }] : []),
+		{ id: 'ready', label: 'Ready', count: graphStore.ready.size },
 		{ id: 'blocked', label: 'Blocked', count: graphStore.blockedCount }
 	]);
 
@@ -99,6 +100,7 @@
 				data: {
 					...task,
 					terminal: task.depends_on.length > 0 && !dependents.has(task.id),
+					ready: graphStore.ready.has(task.id),
 					chore: task.tags.includes('chore'),
 					selected: task.id === selectedTaskId,
 					dim: !graphStore.matches(task)
@@ -213,9 +215,13 @@
 				type="button"
 				class="chip"
 				aria-pressed={graphStore.filter === chip.id}
-				style={chip.id === 'blocked' && graphStore.filter !== 'blocked'
-					? 'color:var(--color-danger)'
-					: ''}
+				style={graphStore.filter === chip.id
+					? ''
+					: chip.id === 'blocked'
+						? 'color:var(--color-danger)'
+						: chip.id === 'ready'
+							? 'color:var(--color-st-done-fg)'
+							: ''}
 				onclick={() => (graphStore.filter = chip.id)}>{chip.label} · {chip.count}</button
 			>
 		{/each}
