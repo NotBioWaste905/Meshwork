@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Status, type Task } from '$lib/api';
-	import Avatar from '$lib/components/Avatar.svelte';
+	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
+	import AssigneePicker from '$lib/components/AssigneePicker.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
@@ -93,11 +94,9 @@
 		if (task && status !== task.status) graphStore.updateTask(task.id, { status });
 	}
 
-	function setAssignee(name: string) {
-		if (!task) return;
-		const user = name.trim();
-		if (user === (task.users[0] ?? '')) return;
-		graphStore.updateTask(task.id, { users: user ? [user] : [] });
+	function setAssignee(actorId: string) {
+		if (!task || actorId === (task.users[0] ?? '')) return;
+		graphStore.updateTask(task.id, { users: actorId ? [actorId] : [] });
 	}
 
 	async function addBlocker(event: Event) {
@@ -323,23 +322,8 @@
 						</dd>
 						<dt class="text-muted">Assignee</dt>
 						<dd class="m-0 flex items-center gap-2">
-							{#if task.users[0]}<Avatar name={task.users[0]} size={24} />{/if}
-							<input
-								type="text"
-								class="border-line-strong bg-surface h-8 min-w-0 flex-1 rounded-lg border px-2.5 py-0 text-sm"
-								aria-label="Assignee"
-								placeholder="Unassigned"
-								list="assignee-options"
-								autocomplete="off"
-								value={task.users[0] ?? ''}
-								onchange={(e) => setAssignee(e.currentTarget.value)}
-								onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-							/>
-							<datalist id="assignee-options">
-								{#each graphStore.users as user (user)}
-									<option value={user}></option>
-								{/each}
-							</datalist>
+							{#if task.users[0]}<ActorAvatar id={task.users[0]} size={24} />{/if}
+							<AssigneePicker small value={task.users[0] ?? ''} onchange={setAssignee} />
 						</dd>
 						<dt class="text-muted">Graph</dt>
 						<dd class="m-0"><a href={base}>{graphStore.name}</a></dd>
@@ -418,7 +402,7 @@
 			class="text-ink min-w-0 flex-[1_1_200px] text-[15px] font-medium no-underline">{t.name}</a
 		>
 		<StatusPill status={t.status} />
-		{#if t.users[0]}<Avatar name={t.users[0]} size={26} />{/if}
+		{#if t.users[0]}<ActorAvatar id={t.users[0]} size={26} />{/if}
 		{#if removable}
 			<button
 				type="button"

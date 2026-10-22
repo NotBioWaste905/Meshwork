@@ -1,4 +1,14 @@
-import { api, ApiError, Status, type Graph, type NewTask, type Task, type TaskUpdate } from './api';
+import {
+	api,
+	ApiError,
+	Status,
+	type Actor,
+	type ActorKind,
+	type Graph,
+	type NewTask,
+	type Task,
+	type TaskUpdate
+} from './api';
 import { mergeById } from './liveRefresh';
 import { shortId } from './status';
 
@@ -50,8 +60,21 @@ class GraphStore {
 				(this.tasks.length === 1 ? this.tasks[0].name : `Graph ${this.graphId.slice(0, 8)}`))
 	);
 
-	/** Distinct assignees of the graph's tasks. Users are free-form names, there is no user API. */
-	users = $derived([...new Set(this.tasks.flatMap((t) => t.users))].sort());
+	/** Everyone who can be assigned, by name. Global, not per graph. */
+	actors = $state.raw<Actor[]>([]);
+	actorsById = $derived(new Map(this.actors.map((a) => [a.id, a])));
+
+	/** Distinct assignee IDs of the graph's tasks, by actor name. */
+	users = $derived(
+		[...new Set(this.tasks.flatMap((t) => t.users))].sort((a, b) =>
+			this.actorName(a).localeCompare(this.actorName(b))
+		)
+	);
+
+	/** Display name of an actor; the ID itself if the actor is not loaded. */
+	actorName(id: string): string {
+		return this.actorsById.get(id)?.name ?? id;
+	}
 
 	doneCount = $derived(this.tasks.filter((t) => t.status === Status.DONE).length);
 	blockedCount = $derived(this.tasks.filter((t) => t.status === Status.BLOCKED).length);
@@ -97,11 +120,16 @@ class GraphStore {
 		const epoch = this.epoch;
 		this.refreshing = true;
 		try {
-			const [graph, tasks] = await Promise.all([api.getGraph(graphId), api.getAllTasks(graphId)]);
+			const [graph, tasks, actors] = await Promise.all([
+				api.getGraph(graphId),
+				api.getAllTasks(graphId),
+				api.listActors()
+			]);
 			// another graph opened, an own write overlapped, or an edit began meanwhile
 			if (graphId !== this.graphId || epoch !== this.epoch || this.holds.size > 0) return;
 			if (graph.name !== this.graph?.name) this.graph = graph;
 			this.tasks = mergeById(this.tasks, tasks);
+			this.actors = mergeById(this.actors, actors);
 		} catch (error) {
 			// background refresh: keep the current data, the next tick tries again
 			console.warn('Background refresh failed:', error);
@@ -133,9 +161,14 @@ class GraphStore {
 			this.filter = 'all';
 		}
 		try {
-			const [graph, tasks] = await Promise.all([api.getGraph(graphId), api.getAllTasks(graphId)]);
+			const [graph, tasks, actors] = await Promise.all([
+				api.getGraph(graphId),
+				api.getAllTasks(graphId),
+				api.listActors()
+			]);
 			this.graph = graph;
 			this.tasks = tasks;
+			this.actors = actors;
 			this.error = '';
 		} catch (error) {
 			if (error instanceof ApiError && error.status === 404) {
@@ -154,6 +187,18 @@ class GraphStore {
 
 	private replace(task: Task) {
 		this.tasks = this.tasks.map((t) => (t.id === task.id ? task : t));
+	}
+
+	async addActor(name: string, kind: ActorKind): Promise<Actor | null> {
+		try {
+			const created = await this.write(() => api.addActor({ name, kind }));
+			this.actors = [...this.actors, created].sort((a, b) => a.name.localeCompare(b.name));
+			this.error = '';
+			return created;
+		} catch (error) {
+			this.fail('add actor', error);
+			return null;
+		}
 	}
 
 	async addTask(task: NewTask): Promise<Task | null> {

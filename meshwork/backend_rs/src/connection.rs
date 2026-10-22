@@ -80,15 +80,27 @@ pub async fn ensure_connection_layer<B>(
 /// Creates the lookup indexes every query relies on. Idempotent: an index
 /// that already exists is not an error.
 pub async fn ensure_indexes(graph: &mut AsyncGraph) -> Result<()> {
-    for (label, q) in [
-        ("Task", "CREATE INDEX FOR (t:Task) ON (t.id)"),
-        ("Graph", "CREATE INDEX FOR (g:Graph) ON (g.id)"),
+    for (field, q) in [
+        ("Task.id", "CREATE INDEX FOR (t:Task) ON (t.id)"),
+        ("Graph.id", "CREATE INDEX FOR (g:Graph) ON (g.id)"),
+        ("Actor.id", "CREATE INDEX FOR (a:Actor) ON (a.id)"),
+        ("Actor.name", "CREATE INDEX FOR (a:Actor) ON (a.name)"),
     ] {
         match graph.query(q).execute().await {
-            Ok(_) => info!("Created index on {}.id", label),
+            Ok(_) => info!("Created index on {}", field),
             Err(e) if e.to_string().contains("already indexed") => {}
-            Err(e) => return Err(AppError::Database(format!("index on {label}.id: {e}"))),
+            Err(e) => return Err(AppError::Database(format!("index on {field}: {e}"))),
         }
+    }
+    Ok(())
+}
+
+/// Brings data written by older versions up to the current model. Runs at
+/// startup after [`ensure_indexes`]; idempotent.
+pub async fn migrate(graph: &mut AsyncGraph) -> Result<()> {
+    let users = crate::db::migrate_users_to_actors(graph).await?;
+    if users > 0 {
+        info!("Migrated {} free-text assignees to actors", users);
     }
     Ok(())
 }

@@ -24,8 +24,8 @@ pub mod schemas;
 
 use error::{AppError, Result};
 use schemas::{
-    ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate, MessageResponse, NewGraph,
-    NewTask, Task, TaskUpdate,
+    Actor, ActorUpdate, ConnectNodesRequest, CreateGraphResponse, GraphInfo, GraphUpdate,
+    MessageResponse, NewActor, NewGraph, NewTask, Task, TaskUpdate,
 };
 
 #[derive(Clone)]
@@ -54,6 +54,8 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/health", get(health))
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/graphs", get(list_graphs))
+        .route("/v0/actors", get(list_actors).post(add_actor))
+        .route("/v0/actors/:actor_id", get(get_actor).put(edit_actor))
         .route("/v0/:graph_id", get(get_graph).put(edit_graph))
         .route("/v0/:graph_id/task/add/", post(add_task))
         .route("/v0/:graph_id/all_tasks", get(get_all_tasks))
@@ -133,6 +135,61 @@ async fn edit_graph(
     Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
 }
 
+async fn list_actors(State(state): State<AppState>) -> Result<Json<Vec<Actor>>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::list_actors(&mut graph).await?))
+}
+
+async fn get_actor(
+    State(state): State<AppState>,
+    Path(actor_id): Path<String>,
+) -> Result<Json<Actor>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::get_actor(&mut graph, &actor_id).await?))
+}
+
+async fn add_actor(
+    State(state): State<AppState>,
+    Json(actor): Json<NewActor>,
+) -> Result<(StatusCode, Json<Actor>)> {
+    let name = actor.name.trim();
+    if name.is_empty() {
+        return Err(AppError::BadRequest(
+            "Actor name cannot be empty".to_string(),
+        ));
+    }
+    let id = Uuid::new_v4().to_string();
+    let mut graph = state.graph.clone();
+    db::ensure_actor_name_free(&mut graph, name, &id).await?;
+    info!("Adding actor '{}' ({})", id, name);
+    db::create_actor(&mut graph, &id, name, actor.kind).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(db::get_actor(&mut graph, &id).await?),
+    ))
+}
+
+async fn edit_actor(
+    State(state): State<AppState>,
+    Path(actor_id): Path<String>,
+    Json(update): Json<ActorUpdate>,
+) -> Result<Json<Actor>> {
+    let name = update.name.as_deref().map(str::trim);
+    if name == Some("") {
+        return Err(AppError::BadRequest(
+            "Actor name cannot be empty".to_string(),
+        ));
+    }
+    let mut graph = state.graph.clone();
+    db::get_actor(&mut graph, &actor_id).await?;
+    if let Some(name) = name {
+        db::ensure_actor_name_free(&mut graph, name, &actor_id).await?;
+    }
+    info!("Editing actor '{}'", actor_id);
+    db::update_actor(&mut graph, &actor_id, name, update.kind).await?;
+    Ok(Json(db::get_actor(&mut graph, &actor_id).await?))
+}
+
 async fn add_task(
     State(state): State<AppState>,
     Path(graph_id): Path<String>,
@@ -147,6 +204,7 @@ async fn add_task(
     let mut graph = state.graph.clone();
     db::ensure_graph(&mut graph, &graph_id).await?;
     db::ensure_tasks_in_graph(&mut graph, &graph_id, &task.depends_on).await?;
+    let users = db::resolve_actors(&mut graph, &task.users).await?;
 
     let id = Uuid::new_v4().to_string();
     info!("Adding task '{}' to graph '{}'", id, graph_id);
@@ -161,7 +219,7 @@ async fn add_task(
     )
     .await?;
     db::set_dependencies(&mut graph, &id, &task.depends_on).await?;
-    db::set_users(&mut graph, &id, &task.users).await?;
+    db::set_users(&mut graph, &id, &users).await?;
 
     let created = db::get_task(&mut graph, &graph_id, &id).await?;
     Ok((StatusCode::CREATED, Json(created)))
@@ -225,6 +283,10 @@ async fn edit_task(
         db::ensure_tasks_in_graph(&mut graph, &graph_id, deps).await?;
         ensure_no_cycle(&mut graph, &task_id, deps).await?;
     }
+    let users = match &update.users {
+        Some(refs) => Some(db::resolve_actors(&mut graph, refs).await?),
+        None => None,
+    };
 
     db::update_task_props(
         &mut graph,
@@ -238,7 +300,7 @@ async fn edit_task(
     if let Some(deps) = &update.depends_on {
         db::set_dependencies(&mut graph, &task_id, deps).await?;
     }
-    if let Some(users) = &update.users {
+    if let Some(users) = &users {
         db::set_users(&mut graph, &task_id, users).await?;
     }
 

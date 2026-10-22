@@ -9,9 +9,9 @@ none of them is a second-class view. See [MISSION.md](MISSION.md) for the
 product idea (in Russian).
 
 > **Status: early development.** Tasks, dependencies and the three views work
-> against the real backend. Users, auth, the activity log, reviewers and graph
-> metadata do not exist in the API yet, so the UI leaves those parts of the
-> design out. The full list is in [TODO.md](TODO.md).
+> against the real backend; assignees are actors (people and AI agents). Auth,
+> the activity log and reviewers do not exist in the API yet, so the UI leaves
+> those parts of the design out. The full list is in [TODO.md](TODO.md).
 
 ## Stack
 
@@ -98,6 +98,8 @@ All routes are under `/v0`; errors come back as `{"message": "..."}`.
 | `GET` `PUT` `DELETE` | `/:graph_id/task/:task_id` | Read, partially update, delete a task |
 | `POST` | `/:graph_id/connect_nodes/` | `{"node_dependency", "node_dependee"}`: the dependency blocks the dependee; `409` if it would create a cycle |
 | `POST` | `/:graph_id/disconnect_nodes/` | Remove that dependency |
+| `GET` `POST` | `/actors` | List actors (people and AI agents, shared by all graphs); create one from `{"name", "kind": "human" \| "agent"}`, `409` if the name is taken |
+| `GET` `PUT` | `/actors/:actor_id` | Read, partially update an actor |
 
 A task looks like this:
 
@@ -108,11 +110,13 @@ A task looks like this:
   "description": "",
   "status": "TODO",
   "depends_on": ["…ids of the tasks blocking this one"],
-  "users": ["Andrei Chirkin"],
+  "users": ["…ids of the assigned actors"],
   "tags": ["docs"],
   "graph_id": "b773cd2b-…"
 }
 ```
+
+When creating or editing a task, `users` may name an actor by id or by name; unknown actors are a `404`.
 
 `status` is one of `TODO`, `IN_PROGRESS`, `REVIEW`, `BLOCKED`, `DONE`.
 

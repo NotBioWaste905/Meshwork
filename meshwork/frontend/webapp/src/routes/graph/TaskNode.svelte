@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
-	import Avatar from '$lib/components/Avatar.svelte';
+	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { Status } from '$lib/api';
 	import type { TaskFlowNode } from './types';
@@ -40,7 +40,7 @@
 			<StatusPill status={data.status} size="xs" dot />
 		{/if}
 		{#if data.users[0]}
-			<Avatar name={data.users[0]} size={22} />
+			<ActorAvatar id={data.users[0]} size={22} />
 		{/if}
 	</div>
 	<div

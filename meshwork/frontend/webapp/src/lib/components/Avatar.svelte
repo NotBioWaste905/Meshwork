@@ -2,12 +2,15 @@
 	let {
 		name,
 		size = 24,
-		ring = false
+		ring = false,
+		agent = false
 	}: {
 		name: string;
 		size?: number;
 		/** White ring, for overlapping avatar stacks. */
 		ring?: boolean;
+		/** AI agents get a rounded square instead of a circle. */
+		agent?: boolean;
 	} = $props();
 
 	const PALETTE = ['#0F766E', '#7A3FC4', '#B4530A', '#2349C7', '#A13A6B', '#3E6B1F'];
@@ -23,13 +26,15 @@
 </script>
 
 <span
-	class="inline-flex flex-none items-center justify-center rounded-full font-semibold text-white"
+	class="inline-flex flex-none items-center justify-center font-semibold text-white {agent
+		? 'rounded-[30%]'
+		: 'rounded-full'}"
 	class:border-2={ring}
 	class:border-white={ring}
 	style="width:{size}px;height:{size}px;background:{color};font-size:{Math.max(
 		9,
 		Math.round(size * 0.42)
 	)}px"
-	title={name}
-	aria-label={name}>{initials}</span
+	title={agent ? `${name} (agent)` : name}
+	aria-label={agent ? `${name} (agent)` : name}>{initials}</span
 >

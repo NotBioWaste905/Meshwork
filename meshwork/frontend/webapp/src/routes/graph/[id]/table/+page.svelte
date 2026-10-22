@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Status } from '$lib/api';
-	import Avatar from '$lib/components/Avatar.svelte';
+	import ActorAvatar from '$lib/components/ActorAvatar.svelte';
 	import GraphHeader from '$lib/components/GraphHeader.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
@@ -14,7 +14,10 @@
 	let tagFilter = $state('');
 	let sortKey = $state<SortKey>('status');
 
-	let assignees = $derived([...new Set(graphStore.tasks.flatMap((t) => t.users))].sort());
+	let assignees = $derived(graphStore.users);
+	/** Sort key of a task's first assignee; unassigned tasks go last. */
+	const assigneeKey = (t: { users: string[] }) =>
+		t.users[0] ? graphStore.actorName(t.users[0]) : '~';
 	let tags = $derived([...new Set(graphStore.tasks.flatMap((t) => t.tags))].sort());
 
 	let rows = $derived(
@@ -25,7 +28,7 @@
 			.filter((t) => !tagFilter || t.tags.includes(tagFilter))
 			.toSorted((a, b) => {
 				if (sortKey === 'name') return a.name.localeCompare(b.name);
-				if (sortKey === 'assignee') return (a.users[0] ?? '~').localeCompare(b.users[0] ?? '~');
+				if (sortKey === 'assignee') return assigneeKey(a).localeCompare(assigneeKey(b));
 				return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status);
 			})
 	);
@@ -65,7 +68,7 @@
 		</select>
 		<select class={select} aria-label="Assignee" bind:value={assigneeFilter}>
 			<option value="">Assignee</option>
-			{#each assignees as a (a)}<option value={a}>{a}</option>{/each}
+			{#each assignees as a (a)}<option value={a}>{graphStore.actorName(a)}</option>{/each}
 		</select>
 		<select class={select} aria-label="Tag" bind:value={tagFilter}>
 			<option value="">Tag</option>
@@ -123,7 +126,9 @@
 							<td>
 								{#if task.users.length > 0}
 									<span class="inline-flex items-center gap-2">
-										<Avatar name={task.users[0]} size={24} />{task.users[0]}
+										<ActorAvatar id={task.users[0]} size={24} />{graphStore.actorName(
+											task.users[0]
+										)}
 									</span>
 								{:else}
 									<span class="text-muted">Unassigned</span>

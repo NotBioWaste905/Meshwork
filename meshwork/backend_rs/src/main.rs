@@ -35,6 +35,10 @@ async fn main() {
         error!("Failed to create FalkorDB indexes: {:?}", e);
         std::process::exit(1);
     }
+    if let Err(e) = connection::migrate(&mut graph).await {
+        error!("Failed to migrate FalkorDB data: {:?}", e);
+        std::process::exit(1);
+    }
 
     let state = AppState { graph };
     info!("CORS allowed origins: {}", cors_origins);

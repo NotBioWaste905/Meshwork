@@ -40,7 +40,7 @@ C4Container
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
         Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей")
         Container(mcp, "MCP Server", "Rust, axum 0.8, rmcp", "Streamable HTTP :8080/mcp, bearer-токены; инструменты для AI-агентов поверх REST бэкенда (list_ready_tasks, get_task_context, update_task, link_tasks...)")
-        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/User, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO (BLOCKS/AFFECTS — план)")
+        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/Actor, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")

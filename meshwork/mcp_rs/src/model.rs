@@ -21,6 +21,7 @@ pub struct Task {
     pub description: String,
     /// IDs of the tasks blocking this one.
     pub depends_on: Vec<String>,
+    /// IDs of the assigned actors (`/v0/actors`).
     pub users: Vec<String>,
     pub tags: Vec<String>,
     pub status: Status,
