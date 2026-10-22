@@ -415,7 +415,9 @@ pub async fn disconnect(graph: &mut AsyncGraph, dependee: &str, dependency: &str
     Ok(true)
 }
 
-const ACTOR_RETURN: &str = "RETURN a.id AS id, a.name AS name, a.kind AS kind";
+/// Follows a `MATCH` that binds `a:Actor`; `count` is per actor.
+const ACTOR_RETURN: &str = "OPTIONAL MATCH (t:Task)-[:ASSIGNED_TO]->(a) \
+     RETURN a.id AS id, a.name AS name, a.kind AS kind, count(t) AS task_count";
 
 fn row_to_actor(row: &Row) -> Result<Actor> {
     let kind: String = row.try_get("kind").map_err(db_err)?;
@@ -424,6 +426,7 @@ fn row_to_actor(row: &Row) -> Result<Actor> {
         name: row.try_get("name").map_err(db_err)?,
         kind: ActorKind::parse(&kind)
             .ok_or_else(|| AppError::Internal(format!("Bad actor kind '{}' in DB", kind)))?,
+        task_count: row.try_get("task_count").map_err(db_err)?,
     })
 }
 
@@ -525,6 +528,35 @@ pub async fn update_actor(
     }
     query.execute().await.map_err(db_err)?;
     Ok(())
+}
+
+/// Deletes the actor together with its `ASSIGNED_TO` edges.
+pub async fn delete_actor(graph: &mut AsyncGraph, actor_id: &str) -> Result<()> {
+    graph
+        .query("MATCH (a:Actor {id: $id}) DETACH DELETE a")
+        .with_param("id", actor_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Moves the tasks assigned to `from` over to `into`, then deletes `from`. A task assigned to
+/// both keeps one edge. If interrupted between the two queries, `from` is still there and the
+/// merge can simply be repeated.
+pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Result<()> {
+    graph
+        .query(
+            "MATCH (t:Task)-[:ASSIGNED_TO]->(:Actor {id: $from}) \
+             MATCH (d:Actor {id: $into}) \
+             MERGE (t)-[:ASSIGNED_TO]->(d)",
+        )
+        .with_param("from", from)
+        .with_param("into", into)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    delete_actor(graph, from).await
 }
 
 /// Maps each reference — an actor ID or, failing that, an actor name — to the

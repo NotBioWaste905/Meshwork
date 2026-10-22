@@ -46,6 +46,8 @@ export type Actor = {
 	/** Unique among actors. */
 	name: string;
 	kind: ActorKind;
+	/** Number of tasks assigned to the actor, across all graphs. */
+	task_count: number;
 };
 
 export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -113,8 +115,18 @@ export class MeshworkAPI {
 		return this.request('POST', '/v0/actors', actor);
 	}
 
-	updateActor(actorId: string, patch: Partial<Omit<Actor, 'id'>>): Promise<Actor> {
+	updateActor(actorId: string, patch: Partial<Pick<Actor, 'name' | 'kind'>>): Promise<Actor> {
 		return this.request('PUT', `/v0/actors/${actorId}`, patch);
+	}
+
+	/** 409 while the actor is assigned to tasks, unless `unassign` drops those assignments. */
+	deleteActor(actorId: string, unassign = false): Promise<{ message: string }> {
+		return this.request('DELETE', `/v0/actors/${actorId}?unassign=${unassign}`);
+	}
+
+	/** Moves the actor's tasks to `into` (an ID or name) and deletes it; returns the one kept. */
+	mergeActor(actorId: string, into: string): Promise<Actor> {
+		return this.request('POST', `/v0/actors/${actorId}/merge`, { into });
 	}
 
 	// Task operations

@@ -686,7 +686,7 @@ async fn actors_crud() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(
         body,
-        json!({ "id": ann.id, "name": "Ann", "kind": "agent" })
+        json!({ "id": ann.id, "name": "Ann", "kind": "agent", "task_count": 0 })
     );
     let (status, body) = app
         .call(Method::PUT, &uri, Some(json!({ "name": "Ann" })))
@@ -776,6 +776,100 @@ async fn assignees_must_be_actors() {
 
 #[tokio::test]
 #[ignore = "needs FalkorDB"]
+async fn actors_delete_and_merge() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let ann = app.add_actor(json!({ "name": "Ann" })).await;
+    let dup = app.add_actor(json!({ "name": "ann" })).await;
+    let bob = app.add_actor(json!({ "name": "bob" })).await;
+    let both = app
+        .add_task(
+            &graph_id,
+            json!({ "name": "both", "users": [ann.id, dup.id] }),
+        )
+        .await;
+    let only_dup = app
+        .add_task(&graph_id, json!({ "name": "dup", "users": [dup.id] }))
+        .await;
+    let only_bob = app
+        .add_task(&graph_id, json!({ "name": "bob", "users": [bob.id] }))
+        .await;
+
+    let actor = |id: &str| {
+        let uri = format!("/v0/actors/{id}");
+        let app = &app;
+        async move { app.call(Method::GET, &uri, None).await }
+    };
+    let (_, body) = actor(&dup.id).await;
+    assert_eq!(body["task_count"], json!(2));
+
+    // Merging into itself or into nobody changes nothing.
+    let merge = format!("/v0/actors/{}/merge", dup.id);
+    let (status, _) = app
+        .call(Method::POST, &merge, Some(json!({ "into": "ann" })))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = app
+        .call(Method::POST, &merge, Some(json!({ "into": "nobody" })))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(
+            Method::POST,
+            "/v0/actors/missing/merge",
+            Some(json!({ "into": "Ann" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // The duplicate's tasks move over by name, a shared task keeps one assignee.
+    let (status, body) = app
+        .call(Method::POST, &merge, Some(json!({ "into": "Ann" })))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], json!(ann.id));
+    assert_eq!(body["task_count"], json!(2));
+    assert_eq!(actor(&dup.id).await.0, StatusCode::NOT_FOUND);
+    let tasks = app.all_tasks(&graph_id).await;
+    let users = |id: &str| tasks.iter().find(|t| t.id == id).unwrap().users.clone();
+    assert_eq!(users(&both.id), vec![ann.id.clone()]);
+    assert_eq!(users(&only_dup.id), vec![ann.id.clone()]);
+    assert_eq!(users(&only_bob.id), vec![bob.id.clone()]);
+
+    // An assigned actor is only deleted when asked to drop its assignments.
+    let uri = format!("/v0/actors/{}", bob.id);
+    let (status, body) = app.call(Method::DELETE, &uri, None).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(actor(&bob.id).await.0, StatusCode::OK);
+    let (status, body) = app
+        .call(Method::DELETE, &format!("{uri}?unassign=true"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(actor(&bob.id).await.0, StatusCode::NOT_FOUND);
+    let tasks = app.all_tasks(&graph_id).await;
+    assert!(tasks
+        .iter()
+        .find(|t| t.id == only_bob.id)
+        .unwrap()
+        .users
+        .is_empty());
+    assert_eq!(
+        app.call(Method::DELETE, &uri, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+
+    // An unassigned actor goes without asking.
+    let free = app.add_actor(json!({ "name": "free" })).await;
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/actors/{}", free.id), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
 async fn free_text_users_migrate_to_actors() {
     let mut app = TestApp::new().await;
     let graph_id = app.create_graph().await;
@@ -804,8 +898,8 @@ async fn free_text_users_migrate_to_actors() {
     assert_eq!(
         body,
         json!([
-            { "id": "andrew", "name": "andrew", "kind": "human" },
-            { "id": "Claude", "name": "Claude", "kind": "agent" },
+            { "id": "andrew", "name": "andrew", "kind": "human", "task_count": 1 },
+            { "id": "Claude", "name": "Claude", "kind": "agent", "task_count": 2 },
         ])
     );
     let tasks = app.all_tasks(&graph_id).await;
