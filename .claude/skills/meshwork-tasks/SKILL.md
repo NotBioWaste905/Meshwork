@@ -36,7 +36,8 @@ status in the graph is the truth.
 
 ## The loop
 
-1. **Find work.** `list_ready_tasks(graph_id)` — `TODO`, unassigned, all blockers `DONE`.
+1. **Find work.** `list_ready_tasks(graph_id)` — `TODO`, all blockers `DONE`, unassigned or
+   already assigned to you (compact: no descriptions; `get_task_context` has the full task).
    Prefer the lowest milestone tag, then `HIGH` priority, then the task that unblocks the most (`get_task_context`
    → `blocks`). If the user named a task, use that one. Skip tasks that need the user's machine
    or accounts (`ops` like cron/launchd, secrets) unless the user asked — propose them instead.
