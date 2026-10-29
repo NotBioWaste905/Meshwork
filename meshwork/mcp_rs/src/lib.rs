@@ -3,6 +3,7 @@ pub mod backend;
 pub mod graph;
 pub mod model;
 pub mod tools;
+pub mod view;
 
 use axum::{Json, Router, middleware, routing::get};
 use rmcp::transport::streamable_http_server::{

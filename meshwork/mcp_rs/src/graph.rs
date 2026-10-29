@@ -4,14 +4,35 @@ use std::{cmp::Reverse, collections::HashMap};
 
 use crate::model::{Status, Task};
 
+/// Whose ready tasks to list, by assignees.
+#[derive(Debug, Clone, Copy)]
+pub enum Assigned<'a> {
+    /// Assigned to anyone or nobody.
+    Any,
+    /// Nobody is assigned.
+    Nobody,
+    /// Nobody is assigned, or this actor id is among the assignees: what the actor may take.
+    NobodyOr(&'a str),
+}
+
+impl Assigned<'_> {
+    fn matches(self, t: &Task) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Nobody => t.users.is_empty(),
+            Self::NobodyOr(me) => t.users.is_empty() || t.users.iter().any(|u| u == me),
+        }
+    }
+}
+
 /// Tasks an agent can pick up right now: `TODO` with every blocker `DONE`, highest
 /// priority first (the backend's order is kept within a priority).
-pub fn ready_tasks(tasks: &[Task], unassigned_only: bool) -> Vec<&Task> {
+pub fn ready_tasks<'a>(tasks: &'a [Task], assigned: Assigned) -> Vec<&'a Task> {
     let by_id: HashMap<&str, &Task> = tasks.iter().map(|t| (t.id.as_str(), t)).collect();
     let mut ready: Vec<&Task> = tasks
         .iter()
         .filter(|t| t.status == Status::Todo)
-        .filter(|t| !unassigned_only || t.users.is_empty())
+        .filter(|t| assigned.matches(t))
         .filter(|t| {
             t.depends_on.iter().all(|d| {
                 by_id
@@ -70,7 +91,7 @@ mod tests {
             task("d", Status::InProgress, &[], &[]),
             task("e", Status::Todo, &[], &[]),
         ];
-        assert_eq!(ids(ready_tasks(&tasks, false)), vec!["b", "e"]);
+        assert_eq!(ids(ready_tasks(&tasks, Assigned::Any)), vec!["b", "e"]);
     }
 
     #[test]
@@ -79,8 +100,23 @@ mod tests {
             task("a", Status::Todo, &[], &["alice"]),
             task("b", Status::Todo, &[], &[]),
         ];
-        assert_eq!(ids(ready_tasks(&tasks, true)), vec!["b"]);
-        assert_eq!(ids(ready_tasks(&tasks, false)), vec!["a", "b"]);
+        assert_eq!(ids(ready_tasks(&tasks, Assigned::Nobody)), vec!["b"]);
+        assert_eq!(ids(ready_tasks(&tasks, Assigned::Any)), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn ready_for_me_adds_my_tasks_not_others() {
+        let tasks = vec![
+            task("a", Status::Todo, &[], &["alice"]),
+            task("b", Status::Todo, &[], &[]),
+            task("c", Status::Todo, &[], &["me"]),
+            task("d", Status::Todo, &[], &["alice", "me"]),
+            task("e", Status::InProgress, &[], &["me"]),
+        ];
+        assert_eq!(
+            ids(ready_tasks(&tasks, Assigned::NobodyOr("me"))),
+            vec!["b", "c", "d"]
+        );
     }
 
     #[test]
@@ -95,13 +131,16 @@ mod tests {
             with("c", Priority::High),
             with("d", Priority::Normal),
         ];
-        assert_eq!(ids(ready_tasks(&tasks, false)), vec!["c", "b", "d", "a"]);
+        assert_eq!(
+            ids(ready_tasks(&tasks, Assigned::Any)),
+            vec!["c", "b", "d", "a"]
+        );
     }
 
     #[test]
     fn missing_blocker_is_not_ready() {
         let tasks = vec![task("a", Status::Todo, &["ghost"], &[])];
-        assert!(ready_tasks(&tasks, false).is_empty());
+        assert!(ready_tasks(&tasks, Assigned::Any).is_empty());
     }
 
     #[test]

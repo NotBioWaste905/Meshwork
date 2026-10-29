@@ -13,6 +13,7 @@ src/auth.rs      # actor tokens checked via backend GET /v0/me; Caller extractor
 src/tools.rs     # MCP tools (#[tool_router]) — add new ones here
 src/backend.rs   # REST client; backend errors {message} -> Err(String)
 src/graph.rs     # pure graph queries (ready_tasks, dependents) + unit tests
+src/view.rs      # what tools return about tasks: Brief (no description), Neighbor
 src/model.rs     # hand-written mirror of backend_rs/src/schemas.rs
 ```
 
@@ -51,5 +52,11 @@ the `mw_` prefix is refused here with a message naming the usual mistake, a toke
 - Backend contract (`schemas.rs`) changed → update `model.rs` by hand.
 - Logic testable without the network lives in `graph.rs` with unit tests; a new tool with
   non-trivial logic goes there too.
+- **Responses are compact; every byte costs the agent tokens.** Lists and write results return
+  `view::Brief` (no description, empty fields omitted), neighbours in `get_task_context`
+  `view::Neighbor`; the full task only from `get_task_context` (or `list_tasks` with `full`).
+  A new tool returning tasks follows the same rule.
+- `list_ready_tasks` defaults to `for: me` — unassigned plus the caller's own ready tasks,
+  filtered here with `caller.actor.id` (the frontier is computed here anyway, no backend param).
 - Changing behaviour "in the DB" is done in `backend_rs`, not here.
 - A new tool takes `caller: Caller` and calls the backend only through `caller.backend`.

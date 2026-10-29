@@ -13,8 +13,9 @@ use serde_json::json;
 
 use crate::{
     auth::Caller,
-    graph,
+    graph::{self, Assigned},
     model::{ActorKind, NewActor, NewTask, Priority, Status, Task, TaskUpdate},
+    view,
 };
 
 /// The tools. Stateless: every call acts through its [`Caller`], the backend client of the
@@ -34,6 +35,23 @@ fn respond<T: Serialize>(res: Result<T, String>) -> Result<CallToolResult, Error
         Ok(v) => CallToolResult::success(vec![ContentBlock::json(v)?]),
         Err(msg) => CallToolResult::error(vec![ContentBlock::text(msg)]),
     })
+}
+
+fn ok<T: Serialize>(v: T) -> Result<CallToolResult, ErrorData> {
+    respond(Ok::<_, String>(v))
+}
+
+fn fail(msg: String) -> Result<CallToolResult, ErrorData> {
+    respond(Err::<(), _>(msg))
+}
+
+/// A write's outcome as a compact task: the agent knows what it sent, it needs the id and the
+/// resulting state, not the description back.
+fn respond_brief(res: Result<Task, String>) -> Result<CallToolResult, ErrorData> {
+    match res {
+        Ok(t) => ok(view::Brief::from(&t)),
+        Err(e) => fail(e),
+    }
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -57,11 +75,35 @@ pub struct GraphArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct ListTasksArgs {
+    /// Graph ID (UUID).
+    pub graph_id: String,
+    /// Include descriptions and timestamps. Default: false (compact: id, name, status,
+    /// priority, tags, users, depends_on, pr_url). Prefer get_task_context for one task.
+    pub full: Option<bool>,
+}
+
+/// Whose ready tasks `list_ready_tasks` returns.
+#[derive(Deserialize, JsonSchema, Clone, Copy, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ReadyFor {
+    /// Tasks nobody is assigned to, plus tasks already assigned to you.
+    #[default]
+    Me,
+    /// Only tasks nobody is assigned to.
+    Unassigned,
+    /// Every ready task, whoever is assigned.
+    Anyone,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct ReadyArgs {
     /// Graph ID (UUID).
     pub graph_id: String,
-    /// Only return tasks nobody is assigned to. Default: true.
-    pub unassigned_only: Option<bool>,
+    /// me (default): unassigned tasks and tasks assigned to you; unassigned: only tasks
+    /// nobody has; anyone: all ready tasks.
+    #[serde(rename = "for")]
+    pub for_: Option<ReadyFor>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -199,20 +241,32 @@ impl Meshwork {
     }
 
     #[tool(
-        description = "List every task in a graph with its status, assignees and blockers.",
+        description = "List every task in a graph, compact: id, name, status, priority, tags, \
+                       users, depends_on (blocker ids), pr_url; empty fields are omitted. \
+                       Descriptions only with full: true; for one task use get_task_context.",
         annotations(read_only_hint = true)
     )]
     async fn list_tasks(
         &self,
         caller: Caller,
-        Parameters(a): Parameters<GraphArgs>,
+        Parameters(a): Parameters<ListTasksArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        respond(caller.backend.all_tasks(&a.graph_id).await)
+        let tasks = match caller.backend.all_tasks(&a.graph_id).await {
+            Ok(tasks) => tasks,
+            Err(e) => return fail(e),
+        };
+        if a.full.unwrap_or(false) {
+            ok(tasks)
+        } else {
+            ok(view::briefs(&tasks))
+        }
     }
 
     #[tool(
         description = "List tasks that can be started right now: status TODO and every blocker DONE, \
-                       highest priority first. Start here when looking for work.",
+                       highest priority first, compact (no descriptions; empty fields omitted). \
+                       By default the unassigned ones plus those already assigned to you. \
+                       Start here when looking for work.",
         annotations(read_only_hint = true)
     )]
     async fn list_ready_tasks(
@@ -220,17 +274,21 @@ impl Meshwork {
         caller: Caller,
         Parameters(a): Parameters<ReadyArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let res = caller.backend.all_tasks(&a.graph_id).await.map(|tasks| {
-            graph::ready_tasks(&tasks, a.unassigned_only.unwrap_or(true))
-                .into_iter()
-                .cloned()
-                .collect::<Vec<Task>>()
-        });
-        respond(res)
+        let assigned = match a.for_.unwrap_or_default() {
+            ReadyFor::Me => Assigned::NobodyOr(&caller.actor.id),
+            ReadyFor::Unassigned => Assigned::Nobody,
+            ReadyFor::Anyone => Assigned::Any,
+        };
+        let tasks = match caller.backend.all_tasks(&a.graph_id).await {
+            Ok(tasks) => tasks,
+            Err(e) => return fail(e),
+        };
+        ok(view::briefs(graph::ready_tasks(&tasks, assigned)))
     }
 
     #[tool(
-        description = "Get a task together with the tasks blocking it and the tasks it blocks.",
+        description = "Get a task with its full description, plus the tasks blocking it and the \
+                       tasks it blocks (id, name, status, users). Call before starting a task.",
         annotations(read_only_hint = true)
     )]
     async fn get_task_context(
@@ -243,14 +301,11 @@ impl Meshwork {
             let task = tasks.iter().find(|t| t.id == a.task_id).ok_or_else(|| {
                 format!("404: task {} not found in graph {}", a.task_id, a.graph_id)
             })?;
-            let blockers: Vec<&Task> = tasks
-                .iter()
-                .filter(|t| task.depends_on.contains(&t.id))
-                .collect();
+            let blockers = tasks.iter().filter(|t| task.depends_on.contains(&t.id));
             Ok(json!({
                 "task": task,
-                "blocked_by": blockers,
-                "blocks": graph::dependents(&tasks, &task.id),
+                "blocked_by": view::neighbors(blockers),
+                "blocks": view::neighbors(graph::dependents(&tasks, &task.id)),
             }))
         }
         .await;
@@ -261,7 +316,8 @@ impl Meshwork {
         description = "Take a task to work on: assigns you and sets IN_PROGRESS in one step, \
                        only if it is TODO, every blocker is DONE and nobody else is assigned. \
                        If it fails, someone was faster or the task is not ready: pick another \
-                       from list_ready_tasks. Prefer this over update_task for starting work.",
+                       from list_ready_tasks. Prefer this over update_task for starting work. \
+                       Returns the task without its description.",
         annotations(read_only_hint = false)
     )]
     async fn claim_task(
@@ -269,11 +325,12 @@ impl Meshwork {
         caller: Caller,
         Parameters(a): Parameters<TaskArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        respond(caller.backend.claim_task(&a.graph_id, &a.task_id).await)
+        respond_brief(caller.backend.claim_task(&a.graph_id, &a.task_id).await)
     }
 
     #[tool(
-        description = "Create a task. Use blocked_by to declare which tasks must be DONE first.",
+        description = "Create a task. Use blocked_by to declare which tasks must be DONE first. \
+                       Returns the new task (with its id) without its description.",
         annotations(read_only_hint = false)
     )]
     async fn create_task(
@@ -291,12 +348,13 @@ impl Meshwork {
             pr_url: String::new(),
             reporter: a.reporter,
         };
-        respond(caller.backend.add_task(&a.graph_id, &new).await)
+        respond_brief(caller.backend.add_task(&a.graph_id, &new).await)
     }
 
     #[tool(
         description = "Partially update a task; omitted fields stay unchanged. \
-                       To start work use claim_task; use status REVIEW when work is ready, DONE only when verified.",
+                       To start work use claim_task; use status REVIEW when work is ready, DONE only when verified. \
+                       Returns the updated task without its description.",
         annotations(read_only_hint = false, idempotent_hint = true)
     )]
     async fn update_task(
@@ -314,7 +372,7 @@ impl Meshwork {
             pr_url: a.pr_url,
             reporter: a.reporter,
         };
-        respond(
+        respond_brief(
             caller
                 .backend
                 .update_task(&a.graph_id, &a.task_id, &update)
