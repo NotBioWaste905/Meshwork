@@ -6,6 +6,7 @@
 	import AssigneePicker from '$lib/components/AssigneePicker.svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
+	import TaskActivity from '$lib/components/TaskActivity.svelte';
 	import TaskComments from '$lib/components/TaskComments.svelte';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { graphStore } from '$lib/graphStore.svelte';
@@ -326,6 +327,7 @@
 				</section>
 
 				<TaskComments graphId={graphStore.graphId} taskId={task.id} />
+				<TaskActivity graphId={graphStore.graphId} taskId={task.id} />
 			</main>
 
 			<aside class="flex max-w-full min-w-0 flex-[1_1_300px] flex-col gap-5">
