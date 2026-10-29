@@ -231,7 +231,7 @@
 					: chip.id === 'blocked'
 						? 'color:var(--color-danger)'
 						: chip.id === 'ready'
-							? 'color:var(--color-st-done-fg)'
+							? 'color:var(--color-ready)'
 							: ''}
 				onclick={() => (graphStore.filter = chip.id)}>{chip.label} · {chip.count}</button
 			>
