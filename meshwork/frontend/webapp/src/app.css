@@ -31,6 +31,9 @@
 	--color-danger: #a13a0b;
 	--color-danger-dot: #e0561f;
 	--color-teal: #0f766e;
+	/* Ready to start (TODO, all blockers DONE): deliberately not a status colour */
+	--color-ready: #0e7490;
+	--color-ready-bg: #d6f1f7;
 
 	/* Status pills: bg / fg / dot */
 	--color-st-todo-bg: #e8ebef;

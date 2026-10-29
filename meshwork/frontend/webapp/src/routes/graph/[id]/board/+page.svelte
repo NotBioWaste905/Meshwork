@@ -43,7 +43,7 @@
 			type="button"
 			class="chip"
 			aria-pressed={graphStore.filter === 'ready'}
-			style={graphStore.filter === 'ready' ? '' : 'color:var(--color-st-done-fg)'}
+			style={graphStore.filter === 'ready' ? '' : 'color:var(--color-ready)'}
 			onclick={() => (graphStore.filter = 'ready')}>Ready · {graphStore.ready.size}</button
 		>
 		<button
@@ -83,7 +83,7 @@
 							: 'bg-surface text-ink'} {task.status === 'BLOCKED'
 							? 'border-danger-dot border-[1.5px]'
 							: graphStore.ready.has(task.id)
-								? 'border-st-done-dot border-2'
+								? 'border-ready border-2'
 								: 'border-line border'}"
 					>
 						<div class="flex items-center justify-between">
@@ -92,6 +92,12 @@
 									>{shortId(task)}</span
 								>
 								<PriorityMark priority={task.priority} {dark} />
+								{#if graphStore.ready.has(task.id)}
+									<span
+										class="bg-ready-bg text-ready rounded-full px-1.5 text-[10px] leading-4 font-semibold tracking-wide"
+										>READY</span
+									>
+								{/if}
 							</span>
 							{#if task.users[0]}<ActorAvatar id={task.users[0]} size={24} />{/if}
 						</div>

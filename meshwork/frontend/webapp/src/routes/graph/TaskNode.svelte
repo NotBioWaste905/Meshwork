@@ -27,7 +27,7 @@
 			: blocked
 				? '1.5px solid var(--color-danger-dot)'
 				: data.ready
-					? '2px solid var(--color-st-done-dot)'
+					? '2px solid var(--color-ready)'
 					: data.chore
 						? '1.5px dashed var(--color-faint)'
 						: '1px solid var(--color-dot-grid)'
@@ -37,13 +37,20 @@
 <div
 	bind:this={node}
 	title={data.ready ? 'Ready to start · double-click to open' : 'Double-click to open'}
-	class="task-node box-border h-[88px] w-40 rounded-xl p-2.5"
+	class="task-node relative box-border h-[88px] w-40 rounded-xl p-2.5"
 	style="background:{data.terminal ? 'var(--color-ink)' : '#fff'};border:{border};opacity:{data.dim
 		? 0.3
 		: 1};box-shadow:{data.selected
 		? '0 0 0 4px rgba(35,73,199,.18)'
 		: '0 1px 2px rgba(18,22,28,.08)'}"
 >
+	{#if data.ready}
+		<!-- Sits on the outline: ready is not a status, so it gets its own colour and label. -->
+		<span
+			class="bg-ready absolute right-3 -bottom-2 inline-flex h-4 items-center rounded-full px-1.5 text-[10px] font-semibold tracking-wide text-white"
+			>READY</span
+		>
+	{/if}
 	<Handle type="target" position={Position.Left} />
 	<Handle type="source" position={Position.Right} />
 
