@@ -38,13 +38,13 @@ C4Container
 
     System_Boundary(meshwork, "Meshwork") {
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
-        Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей; bearer-токен → актёр (GET /v0/me), CLI meshwork-token выдаёт токены")
+        Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей; обязательный bearer-токен → актёр (GET /v0/me; без токена 401, кроме MESHWORK_ALLOW_ANONYMOUS=true), CLI meshwork-token выдаёт токены")
         Container(mcp, "MCP Server", "Rust, axum 0.8, rmcp", "Streamable HTTP :8080/mcp, токены актёров (проверка через бэкенд, токен пробрасывается в каждый вызов); инструменты для AI-агентов поверх REST бэкенда (list_ready_tasks, get_task_context, update_task, link_tasks...)")
         ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/Actor/Token, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO/OF (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")
-    Rel(frontend, backend, "REST /v0/...", "JSON over HTTP :8000")
+    Rel(frontend, backend, "REST /v0/...", "JSON over HTTP :8000, Bearer токен актёра со страницы /me")
     Rel(backend, db, "Redis protocol", "falkordb crate (async)")
     Rel(agent, mcp, "MCP over HTTP", "Authorization: Bearer")
     Rel(mcp, backend, "REST /v0/...", "JSON over HTTP :8000, Bearer токен клиента")

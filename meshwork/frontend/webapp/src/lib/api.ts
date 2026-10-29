@@ -101,6 +101,8 @@ export type OwnToken = {
 	label: string;
 	/** Milliseconds since the epoch. */
 	created_at: number;
+	/** When the token stops working, ms since the epoch; null = until revoked. */
+	expires_at: number | null;
 	actor_id: string;
 	actor_name: string;
 	/** The token this browser uses. */
@@ -150,6 +152,11 @@ export class MeshworkAPI {
 	private token = '';
 	/** Requests wait for this: the check of a stored token, which may drop a revoked one. */
 	private ready: Promise<unknown> = Promise.resolve();
+	/**
+	 * Called when a request made with the current token (or none) gets a 401: the backend
+	 * requires a token, or the one in use stopped working. `withToken` tells which.
+	 */
+	onUnauthorized: (withToken: boolean) => void = () => {};
 
 	constructor(baseUrl: string = API_BASE_URL) {
 		this.baseUrl = baseUrl;
@@ -186,6 +193,7 @@ export class MeshworkAPI {
 		const text = await response.text();
 		const data = text ? JSON.parse(text) : null;
 		if (!response.ok) {
+			if (response.status === 401 && token === this.token) this.onUnauthorized(!!token);
 			throw new ApiError(response.status, data?.message ?? text ?? response.statusText);
 		}
 		return data as T;

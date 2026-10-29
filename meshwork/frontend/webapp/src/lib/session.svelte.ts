@@ -5,7 +5,8 @@ const KEY = 'meshwork.token';
 
 /**
  * Who the web app acts as: an actor token pasted on the "You" page, kept in this browser's
- * localStorage, and the actor it belongs to. Without one the app works anonymously, as before.
+ * localStorage, and the actor it belongs to. The backend requires one unless it runs with
+ * MESHWORK_ALLOW_ANONYMOUS=true; a 401 sets `signInRequired` and the layout sends the user to /me.
  */
 class Session {
 	token = $state('');
@@ -15,6 +16,8 @@ class Session {
 	ready = $state(false);
 	/** Set when a stored token stopped working and was dropped. */
 	expired = $state(false);
+	/** The backend answered 401 to a request: the user has to sign in on /me. */
+	signInRequired = $state(false);
 
 	constructor() {
 		if (!browser) return;
@@ -24,6 +27,13 @@ class Session {
 			// storage blocked: stay signed out
 		}
 		api.setToken(this.token);
+		api.onUnauthorized = (withToken) => {
+			if (withToken) {
+				this.signOut();
+				this.expired = true;
+			}
+			this.signInRequired = true;
+		};
 		api.waitFor(this.check());
 	}
 
@@ -36,6 +46,7 @@ class Session {
 				if (error instanceof ApiError && error.status === 401) {
 					this.signOut();
 					this.expired = true;
+					this.signInRequired = true;
 				} else {
 					console.warn('Cannot check the stored token:', error);
 				}
@@ -55,6 +66,7 @@ class Session {
 		}
 		this.token = trimmed;
 		this.expired = false;
+		this.signInRequired = false;
 		api.setToken(trimmed);
 		try {
 			localStorage.setItem(KEY, trimmed);

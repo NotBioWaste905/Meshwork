@@ -4,6 +4,8 @@
 #   scripts/mcp-token.sh [--launchctl] [actor] [file]
 #
 # actor defaults to claude; file to .mcp-token in the repo root (gitignored, mode 600).
+# An actor that does not exist yet is created, as an agent (MESHWORK_ACTOR_KIND=human for a
+# person): the backend requires a token for every request, so a fresh install starts here.
 # The token is checked against the backend (MESHWORK_API_URL, default http://localhost:8000).
 # --launchctl (macOS) also runs `launchctl setenv MESHWORK_MCP_TOKEN …`: apps started from the
 # Dock, like the Claude desktop app, read their environment from launchd, not from the shell.
@@ -19,9 +21,10 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 actor=${1:-claude}
 file=${2:-$root/.mcp-token}
 api=${MESHWORK_API_URL:-http://localhost:8000}
+kind=${MESHWORK_ACTOR_KIND:-agent}
 
 token=$(cd "$root" && docker compose exec -T backend \
-	meshwork-token create "$actor" --label "mcp-token.sh on $(hostname -s)")
+	meshwork-token create "$actor" --kind "$kind" --label "mcp-token.sh on $(hostname -s)")
 case $token in
 mw_*) ;;
 *)

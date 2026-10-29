@@ -117,7 +117,10 @@
 							>This browser</span
 						>{/if}</span
 				>
-				<span class="text-muted text-sm">Issued {dateFormat.format(t.created_at)}</span>
+				<span class="text-muted text-sm"
+					>Issued {dateFormat.format(t.created_at)}{#if t.expires_at !== null}
+						· expires {dateFormat.format(t.expires_at)}{/if}</span
+				>
 				<span class="text-faint font-mono text-xs" title="Token ID, for meshwork-token revoke"
 					>{t.id.slice(0, 8)}</span
 				>
