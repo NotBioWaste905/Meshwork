@@ -38,9 +38,9 @@ C4Container
 
     System_Boundary(meshwork, "Meshwork") {
         Container(frontend, "Webapp", "SvelteKit + Svelte 5, Tailwind, @xyflow/svelte + dagre", "Граф-вью, форма задачи. Канбан/таблица — план")
-        Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: CRUD графа и задач, connect/disconnect зависимостей; bearer-токен → актёр (GET /v0/me), CLI meshwork-token выдаёт токены")
+        Container(backend, "Backend API", "Rust, axum, falkordb", "REST /v0/...: пространства, CRUD графа и задач, connect/disconnect зависимостей; bearer-токен → актёр (GET /v0/me), CLI meshwork-token выдаёт токены")
         Container(mcp, "MCP Server", "Rust, axum 0.8, rmcp", "Streamable HTTP :8080/mcp, токены актёров (проверка через бэкенд, токен пробрасывается в каждый вызов); инструменты для AI-агентов поверх REST бэкенда (list_ready_tasks, get_task_context, update_task, link_tasks...)")
-        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Graph/Task/Actor/Token, рёбра PART_OF/DEPENDS_ON/ASSIGNED_TO/OF (BLOCKS/AFFECTS — план)")
+        ContainerDb(db, "FalkorDB", "Graph DB (Redis protocol :6379, browser UI :3001 на хосте)", "Ноды Space/Graph/Task/Actor/Token, рёбра IN/PART_OF/DEPENDS_ON/ASSIGNED_TO/OF (BLOCKS/AFFECTS — план)")
     }
 
     Rel(user, frontend, "HTTPS", "браузер")
@@ -49,6 +49,14 @@ C4Container
     Rel(agent, mcp, "MCP over HTTP", "Authorization: Bearer")
     Rel(mcp, backend, "REST /v0/...", "JSON over HTTP :8000, Bearer токен клиента")
 ```
+
+**Пространства.** Верхний уровень данных — пространство (`(:Space)`), в нём
+графы (`(:Graph)-[:IN]->(:Space)`, у графа ровно одно пространство), в графе —
+задачи. Пространство — граница арендатора и (в будущем) доступа; это не нода-проект
+из MISSION.md, которая живёт внутри графа. Все пространства и графы лежат в одном
+FalkorDB-графе; id графа глобально уникален, поэтому пути `/v0/:graph/...` не
+содержат пространства. Графы, созданные без пространства, и графы со старых данных
+(миграция при старте) попадают в пространство по умолчанию (`id: "default"`).
 
 ## Level 2 — Containers (целевое, по MISSION.md)
 

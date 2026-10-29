@@ -29,7 +29,8 @@ use events::Change;
 use schemas::{
     Actor, ActorUpdate, Comment, ConnectNodesRequest, CreateGraphResponse, Event, GraphInfo,
     GraphUpdate, IssuedToken, LayoutUpdate, MergeActors, MessageResponse, NewActor, NewComment,
-    NewGraph, NewTask, NewToken, OwnToken, Status, Task, TaskUpdate,
+    NewGraph, NewSpace, NewTask, NewToken, OwnToken, Space, SpaceUpdate, Status, Task, TaskUpdate,
+    DEFAULT_SPACE_ID,
 };
 
 #[derive(Clone)]
@@ -58,6 +59,12 @@ pub fn app(state: AppState, cors: CorsLayer) -> Router {
         .route("/health", get(health))
         .route("/v0/create_graph", post(create_graph))
         .route("/v0/graphs", get(list_graphs))
+        .route("/v0/spaces", get(list_spaces).post(add_space))
+        .route(
+            "/v0/spaces/:space_id",
+            get(get_space).put(edit_space).delete(delete_space),
+        )
+        .route("/v0/spaces/:space_id/graphs", get(list_space_graphs))
         .route("/v0/me", get(me))
         .route("/v0/me/tokens", get(list_own_tokens).post(issue_own_token))
         .route("/v0/me/tokens/:token_id", delete(revoke_own_token))
@@ -120,19 +127,132 @@ async fn create_graph(
             .map_err(|e| AppError::BadRequest(format!("Invalid graph body: {}", e)))?
     };
     let name = new_graph.name.trim().to_string();
-    let id = Uuid::new_v4().to_string();
-    info!("Creating new graph with ID: {}", id);
     let mut graph = state.graph.clone();
-    db::create_graph(&mut graph, &id, &name).await?;
+    let space = match new_graph.space.as_deref().filter(|s| !s.is_empty()) {
+        Some(space) if space != DEFAULT_SPACE_ID => {
+            db::get_space(&mut graph, space).await?;
+            space.to_string()
+        }
+        _ => DEFAULT_SPACE_ID.to_string(),
+    };
+    let id = Uuid::new_v4().to_string();
+    info!("Creating new graph with ID: {} in space {}", id, space);
+    db::create_graph(&mut graph, &id, &name, &space).await?;
     if let Some(actor) = &caller.0 {
         db::set_created_by(&mut graph, db::Created::Graph, &id, &actor.id).await?;
     }
-    Ok(Json(CreateGraphResponse { id, name }))
+    Ok(Json(CreateGraphResponse { id, name, space }))
 }
 
-async fn list_graphs(State(state): State<AppState>) -> Result<Json<Vec<GraphInfo>>> {
+#[derive(serde::Deserialize)]
+struct ListGraphsQuery {
+    space: Option<String>,
+}
+
+/// All graphs, or with `?space=<id>` those of one space (404 if there is no such space).
+async fn list_graphs(
+    State(state): State<AppState>,
+    Query(query): Query<ListGraphsQuery>,
+) -> Result<Json<Vec<GraphInfo>>> {
     let mut graph = state.graph.clone();
-    Ok(Json(db::list_graphs(&mut graph).await?))
+    if let Some(space) = &query.space {
+        db::get_space(&mut graph, space).await?;
+    }
+    Ok(Json(
+        db::list_graphs(&mut graph, query.space.as_deref()).await?,
+    ))
+}
+
+async fn list_space_graphs(
+    State(state): State<AppState>,
+    Path(space_id): Path<String>,
+) -> Result<Json<Vec<GraphInfo>>> {
+    let mut graph = state.graph.clone();
+    db::get_space(&mut graph, &space_id).await?;
+    Ok(Json(db::list_graphs(&mut graph, Some(&space_id)).await?))
+}
+
+async fn list_spaces(State(state): State<AppState>) -> Result<Json<Vec<Space>>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::list_spaces(&mut graph).await?))
+}
+
+async fn get_space(
+    State(state): State<AppState>,
+    Path(space_id): Path<String>,
+) -> Result<Json<Space>> {
+    let mut graph = state.graph.clone();
+    Ok(Json(db::get_space(&mut graph, &space_id).await?))
+}
+
+async fn add_space(
+    State(state): State<AppState>,
+    Extension(caller): Extension<auth::Caller>,
+    Json(space): Json<NewSpace>,
+) -> Result<(StatusCode, Json<Space>)> {
+    let name = space.name.trim();
+    if name.is_empty() {
+        return Err(AppError::BadRequest(
+            "Space name cannot be empty".to_string(),
+        ));
+    }
+    let id = Uuid::new_v4().to_string();
+    info!("Creating space '{}' ({})", id, name);
+    let mut graph = state.graph.clone();
+    db::create_space(&mut graph, &id, name).await?;
+    if let Some(actor) = &caller.0 {
+        db::set_created_by(&mut graph, db::Created::Space, &id, &actor.id).await?;
+    }
+    Ok((
+        StatusCode::CREATED,
+        Json(db::get_space(&mut graph, &id).await?),
+    ))
+}
+
+async fn edit_space(
+    State(state): State<AppState>,
+    Path(space_id): Path<String>,
+    Json(update): Json<SpaceUpdate>,
+) -> Result<Json<Space>> {
+    let name = update.name.as_deref().map(str::trim);
+    if name == Some("") {
+        return Err(AppError::BadRequest(
+            "Space name cannot be empty".to_string(),
+        ));
+    }
+    let mut graph = state.graph.clone();
+    db::get_space(&mut graph, &space_id).await?;
+    if let Some(name) = name {
+        info!("Renaming space '{}'", space_id);
+        db::rename_space(&mut graph, &space_id, name).await?;
+    }
+    Ok(Json(db::get_space(&mut graph, &space_id).await?))
+}
+
+/// Deletes an empty space; 409 while it has graphs, and always for the default space, which
+/// graphs created without a space go to.
+async fn delete_space(
+    State(state): State<AppState>,
+    Path(space_id): Path<String>,
+) -> Result<Json<MessageResponse>> {
+    let mut graph = state.graph.clone();
+    let space = db::get_space(&mut graph, &space_id).await?;
+    if space_id == DEFAULT_SPACE_ID {
+        return Err(AppError::Conflict(
+            "The default space cannot be deleted".to_string(),
+        ));
+    }
+    // Checked again inside the delete query, in case a graph moved in meanwhile.
+    if space.graph_count > 0 || !db::delete_empty_space(&mut graph, &space_id).await? {
+        return Err(AppError::Conflict(format!(
+            "Space '{}' still has graphs; move or delete them first",
+            space.name
+        )));
+    }
+    info!("Deleted space '{}' ({})", space_id, space.name);
+    Ok(Json(MessageResponse {
+        message: format!("Space {} deleted", space_id),
+    }))
 }
 
 async fn get_graph(
@@ -156,8 +276,15 @@ async fn edit_graph(
     }
     let mut graph = state.graph.clone();
     db::ensure_graph(&mut graph, &graph_id).await?;
+    if let Some(space) = &update.space {
+        db::get_space(&mut graph, space).await?;
+    }
     if let Some(name) = &update.name {
         db::rename_graph(&mut graph, &graph_id, name.trim()).await?;
+    }
+    if let Some(space) = &update.space {
+        info!("Moving graph '{}' to space '{}'", graph_id, space);
+        db::move_graph(&mut graph, &graph_id, space).await?;
     }
     Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
 }

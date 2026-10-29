@@ -77,9 +77,10 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 ## Data model (as in code)
 
 ```
-(:Graph {id, name, created_at, updated_at})  # name is the goal, "" for unnamed/older graphs
+(:Space {id, name, created_at, updated_at})  # top-level container of graphs; id "default" is the default one
+(:Graph {id, name, created_at, updated_at})-[:IN]->(:Space)  # exactly one space; name is the goal, "" for unnamed/older graphs
 (:Task {id, name, description, status, tags: [string], priority, pr_url, created_at, updated_at, x, y})-[:PART_OF]->(:Graph)
-(:Task|:Graph)-[:CREATED_BY]->(:Actor)  # the token's actor at creation; none without a token
+(:Task|:Graph|:Space)-[:CREATED_BY]->(:Actor)  # the token's actor at creation; none without a token
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 (:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
@@ -102,7 +103,11 @@ Actors are global (not per graph). `name` is unique and never equal to another a
 task `users` resolve by id first, then by name. API-created actors get UUID ids; actors migrated
 from the old free-text `(:User {id: <text>})` keep the text as id and name (`kind: agent` for
 `claude`). The migration (`connection::migrate`, run at startup after `ensure_indexes`) is
-idempotent; put future data migrations there too.
+idempotent; put future data migrations there too. It also puts every graph without a space into
+the default space (`DEFAULT_SPACE_ID = "default"`, named "Default", created if missing).
+
+Spaces are the tenant/access boundary (not MISSION.md's project node, which lives inside a
+graph). Graph ids are globally unique, so `/v0/:graph/...` paths do not mention the space.
 
 `status` is stored as the API string: `TODO`, `IN_PROGRESS`, `DONE`, `REVIEW`, `BLOCKED`
 (`Status::as_str`); legacy `InProgress` is read via a serde alias. `priority` is `LOW`, `NORMAL`
@@ -113,14 +118,20 @@ read as `NORMAL` and `""`.
 "b blocks a". Keep the name `DEPENDS_ON`, do not rename it.
 
 API (`/v0/...`):
-- `POST create_graph` — optional body `{name}` (no body / empty body = unnamed graph);
-  returns `{ID, name}`
-- `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count,
-  created_at, updated_at, created_by}]`; a graph's `updated_at` is the latest of its own
+- `POST create_graph` — optional body `{name, space?}` (no body / empty body = unnamed graph);
+  `space` is a space id (unknown → 404), the default space when omitted (created on the way if
+  missing); returns `{ID, name, space}`
+- `GET graphs[?space=<id>]` — all graphs (or one space's, unknown space → 404), newest first:
+  `[{id, name, task_count, done_count, blocked_count, created_at, updated_at, created_by, space}]`; a graph's `updated_at` is the latest of its own
   (rename, task deleted) and its tasks'. Timestamps are ms since the epoch, `null` on older data.
   Tasks carry `created_at`, `updated_at` (set by create, PUT, claim, and edge changes on the
   dependee) and `created_by`.
-- `GET :graph` — one graph in the same shape; `PUT :graph` with `{name}` renames (blank → 400)
+- `GET :graph` — one graph in the same shape; `PUT :graph` with `{name?, space?}` renames
+  (blank → 400) and/or moves the graph to another space (unknown → 404, nothing changed)
+- `GET spaces` — oldest first: `[{id, name, graph_count, created_at, updated_at, created_by}]`;
+  `POST spaces` with `{name}` → 201 `Space` (blank → 400); `GET|PUT spaces/:id` (`{name}`
+  renames); `GET spaces/:id/graphs` = `GET graphs?space=:id`; `DELETE spaces/:id` only for an
+  empty space (409 while it has graphs, always 409 for the default space)
 - `GET :graph/all_tasks`
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`,
   highest priority first
@@ -178,7 +189,7 @@ API (`/v0/...`):
   ping (`connection::ensure_connection_layer`) that is retried once on a connection error;
   the handler's own queries, writes included, are never retried — don't add retries there
   (a retried write can apply twice). While FalkorDB is down, requests answer 500 after ~10 s.
-- Indexes on `Task.id` and `Graph.id` are created at startup (`connection::ensure_indexes`,
+- Indexes on `Task.id`, `Graph.id`, `Space.id` (and actor/token lookups) are created at startup (`connection::ensure_indexes`,
   idempotent). A new label looked up by `id` needs its index added there.
 - Query values only via `.with_param(s)`; never format values into a Cypher string.
 - Handlers that run several queries validate first (graph/tasks exist), then write, so a

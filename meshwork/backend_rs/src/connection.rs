@@ -83,6 +83,7 @@ pub async fn ensure_indexes(graph: &mut AsyncGraph) -> Result<()> {
     for (field, q) in [
         ("Task.id", "CREATE INDEX FOR (t:Task) ON (t.id)"),
         ("Graph.id", "CREATE INDEX FOR (g:Graph) ON (g.id)"),
+        ("Space.id", "CREATE INDEX FOR (s:Space) ON (s.id)"),
         ("Actor.id", "CREATE INDEX FOR (a:Actor) ON (a.id)"),
         ("Actor.name", "CREATE INDEX FOR (a:Actor) ON (a.name)"),
         ("Token.hash", "CREATE INDEX FOR (k:Token) ON (k.hash)"),
@@ -103,6 +104,10 @@ pub async fn migrate(graph: &mut AsyncGraph) -> Result<()> {
     let users = crate::db::migrate_users_to_actors(graph).await?;
     if users > 0 {
         info!("Migrated {} free-text assignees to actors", users);
+    }
+    let graphs = crate::db::migrate_graphs_to_default_space(graph).await?;
+    if graphs > 0 {
+        info!("Moved {} graphs into the default space", graphs);
     }
     Ok(())
 }
