@@ -1929,3 +1929,261 @@ async fn change_log_events() {
 
     app.cleanup().await;
 }
+
+/// Runs a `RETURN count(...) AS n` query straight against FalkorDB.
+async fn count(graph: &mut AsyncGraph, q: &str, id: &str) -> i64 {
+    let mut result = graph.query(q).with_param("id", id).execute().await.unwrap();
+    let row = futures::StreamExt::next(&mut result.data)
+        .await
+        .unwrap()
+        .unwrap();
+    row.try_get::<i64>("n").unwrap()
+}
+
+fn graph_ids(list: &Value) -> Vec<String> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .map(|g| g["id"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn spaces_hold_graphs() {
+    let mut app = TestApp::new().await;
+    let ann = app.add_actor(json!({ "name": "ann" })).await;
+    let (ann_token, _, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+
+    // A graph created without a space lands in the default space, made on the way.
+    let (status, body) = app
+        .call(
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "Old" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["space"], "default");
+    let old = body["ID"].as_str().unwrap().to_string();
+
+    // Creating a space: 201, with the creator; a blank name is a 400.
+    let (status, _) = app
+        .call(Method::POST, "/v0/spaces", Some(json!({ "name": "  " })))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, work) = app
+        .call_as(
+            Some(&ann_token),
+            Method::POST,
+            "/v0/spaces",
+            Some(json!({ "name": " Work " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{work}");
+    assert_eq!(work["name"], "Work");
+    assert_eq!(work["graph_count"], 0);
+    assert_eq!(work["created_by"], ann.id.as_str());
+    assert!(work["created_at"].is_i64());
+    let work_id = work["id"].as_str().unwrap().to_string();
+
+    // A graph in that space; an unknown space is a 404 and creates nothing.
+    let (status, body) = app
+        .call(
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "New", "space": work_id })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["space"], work_id.as_str());
+    let new = body["ID"].as_str().unwrap().to_string();
+    let (status, _) = app
+        .call(
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "Lost", "space": "nope" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Listing: every graph carries its space; ?space= and /spaces/:id/graphs filter.
+    let (status, all) = app.call(Method::GET, "/v0/graphs", None).await;
+    assert_eq!(status, StatusCode::OK, "{all}");
+    assert_eq!(all.as_array().unwrap().len(), 2);
+    for g in all.as_array().unwrap() {
+        let expected = if g["id"] == old.as_str() {
+            "default"
+        } else {
+            work_id.as_str()
+        };
+        assert_eq!(g["space"], expected, "{g}");
+    }
+    let (_, in_work) = app
+        .call(Method::GET, &format!("/v0/graphs?space={work_id}"), None)
+        .await;
+    assert_eq!(graph_ids(&in_work), vec![new.clone()]);
+    let (_, in_default) = app
+        .call(Method::GET, "/v0/spaces/default/graphs", None)
+        .await;
+    assert_eq!(graph_ids(&in_default), vec![old.clone()]);
+    let (status, _) = app.call(Method::GET, "/v0/graphs?space=nope", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app.call(Method::GET, "/v0/spaces/nope/graphs", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Spaces with counters, oldest first.
+    let (status, spaces) = app.call(Method::GET, "/v0/spaces", None).await;
+    assert_eq!(status, StatusCode::OK, "{spaces}");
+    let spaces = spaces.as_array().unwrap();
+    assert_eq!(spaces.len(), 2);
+    assert_eq!(spaces[0]["id"], "default");
+    assert_eq!(spaces[0]["name"], "Default");
+    assert_eq!(spaces[0]["graph_count"], 1);
+    assert_eq!(spaces[1]["id"], work_id.as_str());
+    assert_eq!(spaces[1]["graph_count"], 1);
+
+    // Rename; blank → 400, unknown → 404.
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/spaces/{work_id}"),
+            Some(json!({ "name": "Job" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["name"], "Job");
+    let (_, body) = app
+        .call(Method::GET, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(body["name"], "Job");
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/spaces/{work_id}"),
+            Some(json!({ "name": "" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = app
+        .call(Method::PUT, "/v0/spaces/nope", Some(json!({ "name": "X" })))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // A space with graphs cannot be deleted.
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Moving a graph: an unknown space is a 404 and nothing changes; then the move.
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{new}"),
+            Some(json!({ "name": "Renamed", "space": "nope" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (_, body) = app.call(Method::GET, &format!("/v0/{new}"), None).await;
+    assert_eq!(body["name"], "New");
+    assert_eq!(body["space"], work_id.as_str());
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{new}"),
+            Some(json!({ "space": "default" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["space"], "default");
+    assert_eq!(body["name"], "New");
+    let (_, body) = app
+        .call(Method::GET, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(body["graph_count"], 0);
+    let (_, body) = app.call(Method::GET, "/v0/spaces/default", None).await;
+    assert_eq!(body["graph_count"], 2);
+    let edges = count(
+        &mut app.graph,
+        "MATCH (:Graph {id: $id})-[r:IN]->() RETURN count(r) AS n",
+        &new,
+    )
+    .await;
+    assert_eq!(edges, 1);
+
+    // Now empty, it can go; the default space never can.
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = app
+        .call(Method::GET, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/spaces/{work_id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app.call(Method::DELETE, "/v0/spaces/default", None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Task routes do not care about spaces.
+    app.add_task(&new, json!({ "name": "Still works" })).await;
+    assert_eq!(app.all_tasks(&new).await.len(), 1);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn graphs_migrate_into_default_space() {
+    let mut app = TestApp::new().await;
+    // Graphs from before spaces: no IN edge, no Space node at all.
+    app.graph
+        .query(
+            "CREATE (:Graph {id: 'g1', name: 'One', created_at: 1}), \
+                    (:Graph {id: 'g2', name: 'Two'})",
+        )
+        .execute()
+        .await
+        .unwrap();
+
+    // Twice: the second run must be a no-op.
+    connection::migrate(&mut app.graph).await.unwrap();
+    connection::migrate(&mut app.graph).await.unwrap();
+
+    let (status, spaces) = app.call(Method::GET, "/v0/spaces", None).await;
+    assert_eq!(status, StatusCode::OK, "{spaces}");
+    assert_eq!(spaces.as_array().unwrap().len(), 1);
+    assert_eq!(spaces[0]["id"], "default");
+    assert_eq!(spaces[0]["name"], "Default");
+    assert_eq!(spaces[0]["graph_count"], 2);
+    let (_, graphs) = app.call(Method::GET, "/v0/graphs", None).await;
+    assert_eq!(graphs.as_array().unwrap().len(), 2);
+    for g in graphs.as_array().unwrap() {
+        assert_eq!(g["space"], "default", "{g}");
+    }
+    let edges = count(
+        &mut app.graph,
+        "MATCH (g:Graph)-[r:IN]->(:Space) WHERE g.id STARTS WITH $id RETURN count(r) AS n",
+        "g",
+    )
+    .await;
+    assert_eq!(edges, 2);
+
+    // A renamed default space keeps its name when the migration runs again.
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            "/v0/spaces/default",
+            Some(json!({ "name": "Home" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    connection::migrate(&mut app.graph).await.unwrap();
+    let (_, body) = app.call(Method::GET, "/v0/spaces/default", None).await;
+    assert_eq!(body["name"], "Home");
+
+    app.cleanup().await;
+}

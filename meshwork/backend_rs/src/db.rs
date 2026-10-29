@@ -11,8 +11,8 @@ use futures::StreamExt;
 
 use crate::error::{db_err, AppError, Result};
 use crate::schemas::{
-    Actor, ActorKind, Comment, Event, GraphInfo, NewTask, Position, Priority, Status, Task,
-    TaskUpdate, TokenInfo,
+    Actor, ActorKind, Comment, Event, GraphInfo, NewTask, Position, Priority, Space, Status, Task,
+    TaskUpdate, TokenInfo, DEFAULT_SPACE_ID, DEFAULT_SPACE_NAME,
 };
 
 async fn collect_rows(result: QueryResult<RowStream>) -> Result<Vec<Row>> {
@@ -31,14 +31,32 @@ fn first_count(rows: &[Row]) -> Result<i64> {
     }
 }
 
-pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
+/// Creates a graph in the space `space_id`. The default space is created on the way if it is
+/// missing (tests and fresh installs that have not run the migration); any other space must
+/// exist, which the caller has checked.
+pub async fn create_graph(
+    graph: &mut AsyncGraph,
+    graph_id: &str,
+    name: &str,
+    space_id: &str,
+) -> Result<()> {
+    let space = if space_id == DEFAULT_SPACE_ID {
+        "MERGE (s:Space {id: $space}) \
+         ON CREATE SET s.name = $default_name, s.created_at = timestamp(), \
+                       s.updated_at = timestamp()"
+    } else {
+        "MATCH (s:Space {id: $space})"
+    };
+    let q = format!(
+        "{space} CREATE (:Graph {{id: $id, name: $name, created_at: timestamp(), \
+                                  updated_at: timestamp()}})-[:IN]->(s)"
+    );
     graph
-        .query(
-            "CREATE (:Graph {id: $id, name: $name, created_at: timestamp(), \
-                             updated_at: timestamp()})",
-        )
+        .query(q)
         .with_param("id", graph_id)
         .with_param("name", name)
+        .with_param("space", space_id)
+        .with_param("default_name", DEFAULT_SPACE_NAME)
         .execute()
         .await
         .map_err(db_err)?;
@@ -46,9 +64,10 @@ pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) ->
 }
 
 const GRAPH_RETURN: &str = "OPTIONAL MATCH (g)-[:CREATED_BY]->(creator:Actor) \
+     OPTIONAL MATCH (g)-[:IN]->(space:Space) \
      OPTIONAL MATCH (t:Task)-[:PART_OF]->(g) \
      RETURN g.id AS id, g.name AS name, g.created_at AS created_at, \
-            g.updated_at AS own_updated_at, creator.id AS created_by, \
+            g.updated_at AS own_updated_at, creator.id AS created_by, space.id AS space, \
             max(t.updated_at) AS tasks_updated_at, \
             count(t) AS task_count, \
             count(CASE WHEN t.status = 'DONE' THEN 1 END) AS done_count, \
@@ -79,16 +98,26 @@ fn row_to_graph(row: &Row) -> Result<GraphInfo> {
         task_count: row.try_get("task_count").map_err(db_err)?,
         done_count: row.try_get("done_count").map_err(db_err)?,
         blocked_count: row.try_get("blocked_count").map_err(db_err)?,
+        space: row.try_get("space").map_err(db_err)?,
     })
 }
 
-/// All graphs, newest first; graphs without `created_at` (older ones) go last.
-pub async fn list_graphs(graph: &mut AsyncGraph) -> Result<Vec<GraphInfo>> {
+/// All graphs, or those of one space, newest first; graphs without `created_at` (older ones)
+/// go last.
+pub async fn list_graphs(graph: &mut AsyncGraph, space_id: Option<&str>) -> Result<Vec<GraphInfo>> {
+    let filter = match space_id {
+        Some(_) => "MATCH (g:Graph)-[:IN]->(:Space {id: $space})",
+        None => "MATCH (g:Graph)",
+    };
     let q = format!(
-        "MATCH (g:Graph) {} ORDER BY coalesce(created_at, 0) DESC, id",
-        GRAPH_RETURN
+        "{} {} ORDER BY coalesce(created_at, 0) DESC, id",
+        filter, GRAPH_RETURN
     );
-    let result = graph.query(q).execute().await.map_err(db_err)?;
+    let mut query = graph.query(q);
+    if let Some(space_id) = space_id {
+        query = query.with_param("space", space_id);
+    }
+    let result = query.execute().await.map_err(db_err)?;
     collect_rows(result)
         .await?
         .iter()
@@ -119,6 +148,144 @@ pub async fn rename_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) ->
         .await
         .map_err(db_err)?;
     Ok(())
+}
+
+/// Moves a graph to another space: its one `IN` edge now points there. Both exist (checked by
+/// the caller). Counts as a change to the graph.
+pub async fn move_graph(graph: &mut AsyncGraph, graph_id: &str, space_id: &str) -> Result<()> {
+    graph
+        .query(
+            "MATCH (g:Graph {id: $graph_id}) \
+             MATCH (s:Space {id: $space}) \
+             OPTIONAL MATCH (g)-[r:IN]->(:Space) \
+             DELETE r \
+             WITH DISTINCT g, s \
+             CREATE (g)-[:IN]->(s) \
+             SET g.updated_at = timestamp()",
+        )
+        .with_param("graph_id", graph_id)
+        .with_param("space", space_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+const SPACE_RETURN: &str = "OPTIONAL MATCH (s)-[:CREATED_BY]->(creator:Actor) \
+     OPTIONAL MATCH (g:Graph)-[:IN]->(s) \
+     RETURN s.id AS id, s.name AS name, s.created_at AS created_at, \
+            s.updated_at AS updated_at, creator.id AS created_by, count(g) AS graph_count";
+
+fn row_to_space(row: &Row) -> Result<Space> {
+    Ok(Space {
+        id: row.try_get("id").map_err(db_err)?,
+        name: row
+            .try_get::<Option<String>>("name")
+            .map_err(db_err)?
+            .unwrap_or_default(),
+        graph_count: row.try_get("graph_count").map_err(db_err)?,
+        created_at: row.try_get("created_at").map_err(db_err)?,
+        updated_at: row.try_get("updated_at").map_err(db_err)?,
+        created_by: row.try_get("created_by").map_err(db_err)?,
+    })
+}
+
+/// All spaces, oldest first (so the default space, made by the first migration, leads).
+pub async fn list_spaces(graph: &mut AsyncGraph) -> Result<Vec<Space>> {
+    let q = format!(
+        "MATCH (s:Space) {} ORDER BY coalesce(created_at, 0), id",
+        SPACE_RETURN
+    );
+    let result = graph.query(q).execute().await.map_err(db_err)?;
+    collect_rows(result)
+        .await?
+        .iter()
+        .map(row_to_space)
+        .collect()
+}
+
+/// One space; 404 if there is none.
+pub async fn get_space(graph: &mut AsyncGraph, space_id: &str) -> Result<Space> {
+    let q = format!("MATCH (s:Space {{id: $space}}) {}", SPACE_RETURN);
+    let result = graph
+        .query(q)
+        .with_param("space", space_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    match collect_rows(result).await?.first() {
+        Some(row) => row_to_space(row),
+        None => Err(AppError::NotFound(format!("Space {} not found", space_id))),
+    }
+}
+
+pub async fn create_space(graph: &mut AsyncGraph, space_id: &str, name: &str) -> Result<()> {
+    graph
+        .query(
+            "CREATE (:Space {id: $id, name: $name, created_at: timestamp(), \
+                             updated_at: timestamp()})",
+        )
+        .with_param("id", space_id)
+        .with_param("name", name)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+pub async fn rename_space(graph: &mut AsyncGraph, space_id: &str, name: &str) -> Result<()> {
+    graph
+        .query("MATCH (s:Space {id: $id}) SET s.name = $name, s.updated_at = timestamp()")
+        .with_param("id", space_id)
+        .with_param("name", name)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// Deletes a space if it has no graphs, in one query; returns whether it was deleted.
+pub async fn delete_empty_space(graph: &mut AsyncGraph, space_id: &str) -> Result<bool> {
+    let result = graph
+        .query(
+            "MATCH (s:Space {id: $id}) \
+             WHERE NOT (:Graph)-[:IN]->(s) \
+             DETACH DELETE s \
+             RETURN count(s) AS n",
+        )
+        .with_param("id", space_id)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(first_count(&collect_rows(result).await?)? > 0)
+}
+
+/// Puts every graph that is in no space into the default space, creating it if needed.
+/// Idempotent. Returns the number of graphs moved.
+pub async fn migrate_graphs_to_default_space(graph: &mut AsyncGraph) -> Result<i64> {
+    graph
+        .query(
+            "MERGE (s:Space {id: $space}) \
+             ON CREATE SET s.name = $name, s.created_at = timestamp(), \
+                           s.updated_at = timestamp()",
+        )
+        .with_param("space", DEFAULT_SPACE_ID)
+        .with_param("name", DEFAULT_SPACE_NAME)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let result = graph
+        .query(
+            "MATCH (g:Graph) WHERE NOT (g)-[:IN]->(:Space) \
+             MATCH (s:Space {id: $space}) \
+             CREATE (g)-[:IN]->(s) \
+             RETURN count(g) AS n",
+        )
+        .with_param("space", DEFAULT_SPACE_ID)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    first_count(&collect_rows(result).await?)
 }
 
 pub async fn ensure_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<()> {
@@ -501,6 +668,7 @@ pub async fn set_created_by(
 #[derive(Clone, Copy)]
 pub enum Created {
     Graph,
+    Space,
     Task,
 }
 
@@ -508,6 +676,7 @@ impl Created {
     fn as_str(self) -> &'static str {
         match self {
             Created::Graph => "Graph",
+            Created::Space => "Space",
             Created::Task => "Task",
         }
     }

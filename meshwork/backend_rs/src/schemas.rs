@@ -164,12 +164,17 @@ pub struct NewGraph {
     /// The goal the graph leads to; empty when not given.
     #[serde(default)]
     pub name: String,
+    /// ID of the space to create the graph in; the default space when not given.
+    #[serde(default)]
+    pub space: Option<String>,
 }
 
 /// Request body for editing a graph. Omitted fields are left unchanged.
 #[derive(Deserialize, Debug, Default)]
 pub struct GraphUpdate {
     pub name: Option<String>,
+    /// ID of the space to move the graph to.
+    pub space: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -177,6 +182,8 @@ pub struct CreateGraphResponse {
     #[serde(rename = "ID")]
     pub id: String,
     pub name: String,
+    /// ID of the space the graph was created in.
+    pub space: String,
 }
 
 /// Graph metadata with task counters, as returned by `GET /v0/graphs` and `GET /v0/:graph`.
@@ -197,6 +204,45 @@ pub struct GraphInfo {
     /// ID of the actor whose token created the graph, as for tasks.
     #[serde(default)]
     pub created_by: Option<String>,
+    /// ID of the space the graph is in; `None` only for data the startup migration has not seen.
+    #[serde(default)]
+    pub space: Option<String>,
+}
+
+/// ID of the space that graphs created without a `space` go to, and that the migration moves
+/// older graphs into. It cannot be deleted.
+pub const DEFAULT_SPACE_ID: &str = "default";
+/// Name the default space gets when it is created.
+pub const DEFAULT_SPACE_NAME: &str = "Default";
+
+/// A space: the top-level container of graphs, as returned by `GET /v0/spaces`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Space {
+    pub id: String,
+    pub name: String,
+    /// Number of graphs in the space.
+    pub graph_count: i64,
+    /// Milliseconds since the epoch.
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    /// Latest rename (or creation).
+    #[serde(default)]
+    pub updated_at: Option<i64>,
+    /// ID of the actor whose token created the space.
+    #[serde(default)]
+    pub created_by: Option<String>,
+}
+
+/// Request body for `POST /v0/spaces`.
+#[derive(Deserialize, Debug)]
+pub struct NewSpace {
+    pub name: String,
+}
+
+/// Request body for `PUT /v0/spaces/:id`. Omitted fields are left unchanged.
+#[derive(Deserialize, Debug, Default)]
+pub struct SpaceUpdate {
+    pub name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
