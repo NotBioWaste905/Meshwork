@@ -12,8 +12,13 @@
 	import { prLabel, PRIORITY_LABEL, PRIORITY_ORDER } from '$lib/priority';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
-	let taskId = $derived(page.params.taskId ?? '');
-	let task = $derived(graphStore.byId.get(taskId));
+	/** The route takes the task's ID or its key (`MW-12`). */
+	let routeId = $derived(page.params.taskId ?? '');
+	let task = $derived(
+		graphStore.byId.get(routeId) ??
+			graphStore.tasks.find((t) => t.key?.toLowerCase() === routeId.toLowerCase())
+	);
+	let taskId = $derived(task?.id ?? routeId);
 	let base = $derived(`/graph/${graphStore.graphId}`);
 
 	let blockers = $derived(
@@ -461,7 +466,7 @@
 
 {#snippet row(t: Task, removable: boolean)}
 	<li class="border-line-soft flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t py-3">
-		<span class="text-muted w-14 flex-none font-mono text-[13px]">{shortId(t)}</span>
+		<span class="text-muted w-16 flex-none font-mono text-[13px]">{shortId(t)}</span>
 		<a
 			href="{base}/task/{t.id}"
 			class="text-ink min-w-0 flex-[1_1_200px] text-[15px] font-medium no-underline">{t.name}</a

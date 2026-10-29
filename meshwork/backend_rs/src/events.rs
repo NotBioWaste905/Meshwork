@@ -95,6 +95,8 @@ mod tests {
     fn task() -> Task {
         Task {
             id: "t".into(),
+            number: Some(1),
+            key: Some("T-1".into()),
             name: "Name".into(),
             description: "Long text".into(),
             depends_on: vec!["d".into()],

@@ -1929,3 +1929,156 @@ async fn change_log_events() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn tasks_get_numbers_and_keys() {
+    let app = TestApp::new().await;
+    let (status, body) = app
+        .call(
+            Method::POST,
+            "/v0/create_graph",
+            Some(json!({ "name": "Finish the Meshwork MVP" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["key"], json!("FMM"));
+    let graph_id = body["ID"].as_str().unwrap().to_string();
+
+    let a = app.add_task(&graph_id, json!({ "name": "A" })).await;
+    let b = app.add_task(&graph_id, json!({ "name": "B" })).await;
+    assert_eq!((a.number, a.key.as_deref()), (Some(1), Some("FMM-1")));
+    assert_eq!((b.number, b.key.as_deref()), (Some(2), Some("FMM-2")));
+
+    // Numbers are not reused after a delete.
+    let (status, _) = app
+        .call(Method::DELETE, &format!("/v0/{graph_id}/task/2"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let c = app.add_task(&graph_id, json!({ "name": "C" })).await;
+    assert_eq!(c.number, Some(3));
+
+    // Renaming the key changes every task's key; the number, a key or the ID all work in routes.
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{graph_id}"),
+            Some(json!({ "key": " mw " })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["key"], json!("MW"));
+    for task_ref in ["1", "MW-1", "mw-1", a.id.as_str()] {
+        let (status, body) = app
+            .call(
+                Method::GET,
+                &format!("/v0/{graph_id}/task/{task_ref}"),
+                None,
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK, "{task_ref}: {body}");
+        assert_eq!(body["id"], json!(a.id));
+        assert_eq!(body["key"], json!("MW-1"));
+    }
+    let (status, body) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{graph_id}/task/MW-3"),
+            Some(json!({ "status": "DONE" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], json!(c.id));
+    for task_ref in ["2", "FMM-1", "MW-99", "XX-1"] {
+        let (status, _) = app
+            .call(
+                Method::GET,
+                &format!("/v0/{graph_id}/task/{task_ref}"),
+                None,
+            )
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{task_ref}");
+    }
+
+    for bad in ["", "1MW", "M-W", "ABCDEFGHIJK"] {
+        let (status, _) = app
+            .call(
+                Method::PUT,
+                &format!("/v0/{graph_id}"),
+                Some(json!({ "key": bad })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn concurrent_creates_get_distinct_numbers() {
+    let app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let creates = (0..10).map(|i| app.add_task(&graph_id, json!({ "name": format!("T{i}") })));
+    let mut numbers: Vec<i64> = futures::future::join_all(creates)
+        .await
+        .into_iter()
+        .map(|t| t.number.unwrap())
+        .collect();
+    numbers.sort();
+    assert_eq!(numbers, (1..=10).collect::<Vec<_>>());
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn migration_numbers_existing_tasks() {
+    let mut app = TestApp::new().await;
+    let graph_id = app.create_graph().await;
+    let (status, _) = app
+        .call(
+            Method::PUT,
+            &format!("/v0/{graph_id}"),
+            Some(json!({ "name": "Ship it" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let tasks = [
+        app.add_task(&graph_id, json!({ "name": "A" })).await,
+        app.add_task(&graph_id, json!({ "name": "B" })).await,
+        app.add_task(&graph_id, json!({ "name": "C" })).await,
+    ];
+    // Data from before numbers: no key, no counter, no numbers; B is the oldest, A has no
+    // created_at (older still).
+    app.graph
+        .query(
+            "MATCH (g:Graph) REMOVE g.key, g.task_seq \
+             WITH count(g) AS graphs \
+             MATCH (t:Task) REMOVE t.number \
+             WITH t SET t.created_at = CASE t.name WHEN 'A' THEN null \
+                                                  WHEN 'B' THEN 1 ELSE 2 END",
+        )
+        .execute()
+        .await
+        .unwrap();
+    assert_eq!(app.all_tasks(&graph_id).await[0].number, None);
+
+    // Twice: the second run must be a no-op.
+    connection::migrate(&mut app.graph).await.unwrap();
+    connection::migrate(&mut app.graph).await.unwrap();
+
+    let all = app.all_tasks(&graph_id).await;
+    let key_of = |id: &str| {
+        all.iter()
+            .find(|t| t.id == id)
+            .unwrap()
+            .key
+            .clone()
+            .unwrap()
+    };
+    assert_eq!(key_of(&tasks[0].id), "SI-1");
+    assert_eq!(key_of(&tasks[1].id), "SI-2");
+    assert_eq!(key_of(&tasks[2].id), "SI-3");
+    let next = app.add_task(&graph_id, json!({ "name": "D" })).await;
+    assert_eq!(next.key.as_deref(), Some("SI-4"));
+    app.cleanup().await;
+}

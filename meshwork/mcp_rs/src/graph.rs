@@ -40,6 +40,8 @@ mod tests {
     fn task(id: &str, status: Status, deps: &[&str], users: &[&str]) -> Task {
         Task {
             id: id.into(),
+            number: None,
+            key: None,
             name: id.into(),
             description: String::new(),
             depends_on: deps.iter().map(|s| s.to_string()).collect(),

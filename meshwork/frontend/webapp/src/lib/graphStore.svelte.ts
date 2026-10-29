@@ -157,7 +157,7 @@ class GraphStore {
 			]);
 			// another graph opened, an own write overlapped, or an edit began meanwhile
 			if (graphId !== this.graphId || epoch !== this.epoch || this.holds.size > 0) return;
-			if (graph.name !== this.graph?.name) this.graph = graph;
+			if (graph.name !== this.graph?.name || graph.key !== this.graph?.key) this.graph = graph;
 			this.tasks = mergeById(this.tasks, tasks);
 			this.actors = mergeById(this.actors, actors);
 		} catch (error) {
@@ -228,6 +228,25 @@ class GraphStore {
 		} catch (error) {
 			this.fail('add actor', error);
 			return null;
+		}
+	}
+
+	/** Changes the prefix of the task keys; every task's key changes with it. */
+	async setKey(key: string): Promise<boolean> {
+		try {
+			const graphId = this.graphId;
+			const [graph, tasks] = await this.write(async () => {
+				const graph = await api.setGraphKey(graphId, key);
+				return [graph, await api.getAllTasks(graphId)] as const;
+			});
+			if (graphId !== this.graphId) return false;
+			this.graph = graph;
+			this.tasks = mergeById(this.tasks, tasks);
+			this.error = '';
+			return true;
+		} catch (error) {
+			this.fail('change the task key', error);
+			return false;
 		}
 	}
 

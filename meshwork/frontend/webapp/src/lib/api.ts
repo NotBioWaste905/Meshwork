@@ -16,6 +16,10 @@ export enum Priority {
 // A type alias rather than an interface so it fits xyflow's Record<string, unknown> node data.
 export type Task = {
 	id: string;
+	/** The task's number in its graph (1, 2, ... in creation order, never reused). */
+	number: number | null;
+	/** The graph's key and the number, e.g. `MW-12`; task routes accept it in place of the ID. */
+	key: string | null;
 	name: string;
 	description: string;
 	/** IDs of the tasks blocking this one. */
@@ -60,7 +64,15 @@ export type NewTask = Pick<Task, 'name'> &
 export type TaskUpdate = Partial<
 	Omit<
 		Task,
-		'id' | 'graph_id' | 'reporter' | 'created_at' | 'updated_at' | 'created_by' | 'position'
+		| 'id'
+		| 'number'
+		| 'key'
+		| 'graph_id'
+		| 'reporter'
+		| 'created_at'
+		| 'updated_at'
+		| 'created_by'
+		| 'position'
 	>
 > & {
 	/** Actor ID or name; '' removes the reporter. */
@@ -71,6 +83,8 @@ export type TaskUpdate = Partial<
 export type Graph = {
 	id: string;
 	name: string;
+	/** Prefix of the graph's task keys, e.g. `MW` in `MW-12`. */
+	key: string;
 	task_count: number;
 	done_count: number;
 	blocked_count: number;
@@ -177,7 +191,7 @@ export class MeshworkAPI {
 	}
 
 	// Graph operations
-	createGraph(name?: string): Promise<{ ID: string; name: string }> {
+	createGraph(name?: string): Promise<{ ID: string; name: string; key: string }> {
 		return this.request('POST', '/v0/create_graph', name === undefined ? undefined : { name });
 	}
 
@@ -192,6 +206,11 @@ export class MeshworkAPI {
 
 	renameGraph(graphId: string, name: string): Promise<Graph> {
 		return this.request('PUT', `/v0/${graphId}`, { name });
+	}
+
+	/** Changes the prefix of the graph's task keys (`mw` is stored as `MW`). */
+	setGraphKey(graphId: string, key: string): Promise<Graph> {
+		return this.request('PUT', `/v0/${graphId}`, { key });
 	}
 
 	/** The actor of a token: the given one, or the one in use. 401 without a valid token. */

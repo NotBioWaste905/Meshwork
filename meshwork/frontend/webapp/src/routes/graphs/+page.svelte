@@ -184,7 +184,7 @@
 				<ul class="m-0 flex list-none flex-col p-0">
 					{#each waiting as w (w.task.id)}
 						<li class="border-line-soft flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-3">
-							<span class="text-muted w-14 font-mono text-[13px]">{shortId(w.task)}</span>
+							<span class="text-muted w-16 font-mono text-[13px]">{shortId(w.task)}</span>
 							<a
 								href="/graph/{w.graph.id}/task/{w.task.id}"
 								class="text-ink min-w-0 flex-[1_1_260px] text-[15px] font-medium no-underline"

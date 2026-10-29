@@ -64,9 +64,12 @@
 	<div
 		class="mt-1.5 line-clamp-2 text-[13px] leading-4 font-medium"
 		style="color:{data.terminal ? '#fff' : 'var(--color-ink)'}"
-		title={data.name}
+		title={data.key ? `${data.key} ${data.name}` : data.name}
 	>
-		{data.name || 'Unnamed task'}
+		{#if data.key}<span
+				class="mr-1 font-mono text-[11px] font-normal"
+				style="color:{data.terminal ? 'var(--color-faint)' : 'var(--color-muted)'}">{data.key}</span
+			>{/if}{data.name || 'Unnamed task'}
 	</div>
 </div>
 

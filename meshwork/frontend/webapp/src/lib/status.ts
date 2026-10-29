@@ -37,8 +37,10 @@ export const STATUS_ORDER: Status[] = [
 	Status.DONE
 ];
 
-/** The backend has no per-graph task numbers yet, so show the first chars of the UUID. */
-export function shortId(task: Pick<Task, 'id'> | string): string {
+/** How a task is referred to: its key (`MW-12`). Tasks without a number yet (created by an
+ * older backend) fall back to the first chars of the UUID. */
+export function shortId(task: (Pick<Task, 'id'> & Partial<Pick<Task, 'key'>>) | string): string {
+	if (typeof task !== 'string' && task.key) return task.key;
 	const id = typeof task === 'string' ? task : task.id;
 	return `T-${id.replace(/-/g, '').slice(0, 4)}`;
 }

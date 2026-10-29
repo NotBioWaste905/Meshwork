@@ -8,7 +8,7 @@
 	import { PRIORITY_ORDER, prLabel } from '$lib/priority';
 	import { shortId, STATUS_META, STATUS_ORDER } from '$lib/status';
 
-	type SortKey = 'status' | 'priority' | 'name' | 'assignee';
+	type SortKey = 'number' | 'status' | 'priority' | 'name' | 'assignee';
 
 	let search = $state('');
 	let statusFilter = $state<'' | Status>('');
@@ -24,11 +24,15 @@
 
 	let rows = $derived(
 		graphStore.tasks
-			.filter((t) => t.name.toLowerCase().includes(search.trim().toLowerCase()))
+			.filter((t) => {
+				const q = search.trim().toLowerCase();
+				return t.name.toLowerCase().includes(q) || shortId(t).toLowerCase().includes(q);
+			})
 			.filter((t) => !statusFilter || t.status === statusFilter)
 			.filter((t) => !assigneeFilter || t.users.includes(assigneeFilter))
 			.filter((t) => !tagFilter || t.tags.includes(tagFilter))
 			.toSorted((a, b) => {
+				if (sortKey === 'number') return (a.number ?? Infinity) - (b.number ?? Infinity);
 				if (sortKey === 'name') return a.name.localeCompare(b.name);
 				if (sortKey === 'assignee') return assigneeKey(a).localeCompare(assigneeKey(b));
 				if (sortKey === 'priority')
@@ -38,6 +42,7 @@
 	);
 
 	const sortLabel: Record<SortKey, string> = {
+		number: 'ID',
 		status: 'status',
 		priority: 'priority',
 		name: 'name',
@@ -94,7 +99,9 @@
 			<table class="w-full border-collapse">
 				<thead>
 					<tr>
-						<th class="w-[90px]">ID</th>
+						<th class="w-[90px]" aria-sort={sortKey === 'number' ? 'ascending' : 'none'}>
+							<button type="button" class="sort" onclick={() => (sortKey = 'number')}>ID</button>
+						</th>
 						<th aria-sort={sortKey === 'name' ? 'ascending' : 'none'}>
 							<button type="button" class="sort" onclick={() => (sortKey = 'name')}>TASK</button>
 						</th>
@@ -121,7 +128,7 @@
 					{#each rows as task (task.id)}
 						{@const open = graphStore.openBlockers(task)}
 						<tr>
-							<td class="text-muted font-mono text-[13px]">{shortId(task)}</td>
+							<td class="text-muted font-mono text-[13px] whitespace-nowrap">{shortId(task)}</td>
 							<td>
 								<a
 									href="/graph/{graphStore.graphId}/task/{task.id}"

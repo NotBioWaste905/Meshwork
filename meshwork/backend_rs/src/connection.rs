@@ -104,5 +104,13 @@ pub async fn migrate(graph: &mut AsyncGraph) -> Result<()> {
     if users > 0 {
         info!("Migrated {} free-text assignees to actors", users);
     }
+    let keys = crate::db::backfill_graph_keys(graph).await?;
+    if keys > 0 {
+        info!("Gave {} graphs a task key", keys);
+    }
+    let numbers = crate::db::backfill_task_numbers(graph).await?;
+    if numbers > 0 {
+        info!("Numbered {} tasks", numbers);
+    }
     Ok(())
 }

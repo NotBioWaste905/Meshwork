@@ -19,6 +19,7 @@ meshwork/backend_rs/         # Backend: Rust, axum 0.6, falkordb crate
   src/bin/meshwork-token.rs  #   CLI issuing tokens straight in FalkorDB
   src/db.rs                  #   all Cypher queries
   src/frontier.rs            #   ready_tasks: pure frontier logic + unit tests
+  src/numbering.rs           #   task keys (MW-12): graph key derivation, ref parsing + unit tests
   src/schemas.rs             #   API contract: Task, NewTask, TaskUpdate, Status
   src/error.rs               #   AppError -> HTTP response
   tests/api.rs               #   integration tests against a live FalkorDB
@@ -77,8 +78,8 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 ## Data model (as in code)
 
 ```
-(:Graph {id, name, created_at, updated_at})  # name is the goal, "" for unnamed/older graphs
-(:Task {id, name, description, status, tags: [string], priority, pr_url, created_at, updated_at, x, y})-[:PART_OF]->(:Graph)
+(:Graph {id, name, key, task_seq, created_at, updated_at})  # name is the goal, "" for unnamed/older graphs
+(:Task {id, number, name, description, status, tags: [string], priority, pr_url, created_at, updated_at, x, y})-[:PART_OF]->(:Graph)
 (:Task|:Graph)-[:CREATED_BY]->(:Actor)  # the token's actor at creation; none without a token
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
@@ -104,6 +105,16 @@ from the old free-text `(:User {id: <text>})` keep the text as id and name (`kin
 `claude`). The migration (`connection::migrate`, run at startup after `ensure_indexes`) is
 idempotent; put future data migrations there too.
 
+**Task numbers.** Each graph has a `key` (1-10 uppercase letters/digits starting with a letter;
+default derived from the name by `numbering::default_key`: initials of the words without stop
+words, or the first 3 letters of a single word, `T` for non-Latin names) and a counter
+`task_seq`. `create_task` bumps the counter and stores it as the task's `number` in the same
+query, so numbers are unique per graph even under concurrent creates, and never reused after a
+delete. A task's `key` (`MW-12`) is computed on read from the graph's current key, so changing
+the graph key renames every task's key; numbers stay. `migrate` backfills graph keys and
+numbers for older tasks (per graph by `created_at`, missing first, then id; numbers and counter
+in one query per graph).
+
 `status` is stored as the API string: `TODO`, `IN_PROGRESS`, `DONE`, `REVIEW`, `BLOCKED`
 (`Status::as_str`); legacy `InProgress` is read via a serde alias. `priority` is `LOW`, `NORMAL`
 or `HIGH` (`Priority::as_str`), `pr_url` an `http(s)` URL or `""`; tasks stored without them
@@ -113,14 +124,15 @@ read as `NORMAL` and `""`.
 "b blocks a". Keep the name `DEPENDS_ON`, do not rename it.
 
 API (`/v0/...`):
-- `POST create_graph` — optional body `{name}` (no body / empty body = unnamed graph);
-  returns `{ID, name}`
-- `GET graphs` — all graphs, newest first: `[{id, name, task_count, done_count, blocked_count,
+- `POST create_graph` — optional body `{name, key?}` (no body / empty body = unnamed graph);
+  returns `{ID, name, key}`; a bad `key` → 400
+- `GET graphs` — all graphs, newest first: `[{id, name, key, task_count, done_count, blocked_count,
   created_at, updated_at, created_by}]`; a graph's `updated_at` is the latest of its own
   (rename, task deleted) and its tasks'. Timestamps are ms since the epoch, `null` on older data.
   Tasks carry `created_at`, `updated_at` (set by create, PUT, claim, and edge changes on the
   dependee) and `created_by`.
-- `GET :graph` — one graph in the same shape; `PUT :graph` with `{name}` renames (blank → 400)
+- `GET :graph` — one graph in the same shape; `PUT :graph` with `{name?, key?}` renames
+  (blank name or bad key → 400; `mw` is stored as `MW`)
 - `GET :graph/all_tasks`
 - `GET :graph/ready_tasks[?unassigned_only=true]` — frontier: `TODO` with all deps `DONE`,
   highest priority first
@@ -130,6 +142,9 @@ API (`/v0/...`):
   else is assigned; otherwise 409 with the reason. Returns the `Task`.
 - `GET|PUT|DELETE :graph/task/:id` — PUT is a partial update, lists are replaced, unknown fields ignored;
   `pr_url` that is neither empty nor `http(s)://…` → 400
+- Every `:graph/task/:id/...` route takes the task's id, its `number` (`12`) or its `key`
+  (`MW-12`, any case; another graph's prefix → 404), resolved by `db::resolve_task_ref`. Body
+  fields (`depends_on`, `connect_nodes`) still take ids only. `Task` carries `number` and `key`.
 - Task `users` are actor ids in responses; in requests each entry is an actor id or name,
   unknown → 404 (validated before any write)
 - Task `reporter` is an actor id or `null`; in requests an id or name. On create it defaults to

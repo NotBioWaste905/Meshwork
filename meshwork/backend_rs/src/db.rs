@@ -31,14 +31,20 @@ fn first_count(rows: &[Row]) -> Result<i64> {
     }
 }
 
-pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) -> Result<()> {
+pub async fn create_graph(
+    graph: &mut AsyncGraph,
+    graph_id: &str,
+    name: &str,
+    key: &str,
+) -> Result<()> {
     graph
         .query(
-            "CREATE (:Graph {id: $id, name: $name, created_at: timestamp(), \
-                             updated_at: timestamp()})",
+            "CREATE (:Graph {id: $id, name: $name, key: $key, task_seq: 0, \
+                             created_at: timestamp(), updated_at: timestamp()})",
         )
         .with_param("id", graph_id)
         .with_param("name", name)
+        .with_param("key", key)
         .execute()
         .await
         .map_err(db_err)?;
@@ -47,7 +53,7 @@ pub async fn create_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) ->
 
 const GRAPH_RETURN: &str = "OPTIONAL MATCH (g)-[:CREATED_BY]->(creator:Actor) \
      OPTIONAL MATCH (t:Task)-[:PART_OF]->(g) \
-     RETURN g.id AS id, g.name AS name, g.created_at AS created_at, \
+     RETURN g.id AS id, g.name AS name, g.key AS key, g.created_at AS created_at, \
             g.updated_at AS own_updated_at, creator.id AS created_by, \
             max(t.updated_at) AS tasks_updated_at, \
             count(t) AS task_count, \
@@ -74,6 +80,10 @@ fn row_to_graph(row: &Row) -> Result<GraphInfo> {
         id: row.try_get("id").map_err(db_err)?,
         name: row
             .try_get::<Option<String>>("name")
+            .map_err(db_err)?
+            .unwrap_or_default(),
+        key: row
+            .try_get::<Option<String>>("key")
             .map_err(db_err)?
             .unwrap_or_default(),
         task_count: row.try_get("task_count").map_err(db_err)?,
@@ -119,6 +129,53 @@ pub async fn rename_graph(graph: &mut AsyncGraph, graph_id: &str, name: &str) ->
         .await
         .map_err(db_err)?;
     Ok(())
+}
+
+/// Sets the prefix of the graph's task keys; task numbers stay.
+pub async fn set_graph_key(graph: &mut AsyncGraph, graph_id: &str, key: &str) -> Result<()> {
+    graph
+        .query("MATCH (g:Graph {id: $graph_id}) SET g.key = $key, g.updated_at = timestamp()")
+        .with_param("graph_id", graph_id)
+        .with_param("key", key)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    Ok(())
+}
+
+/// The ID of the task a route names: an ID is returned as is (handlers check it exists), a
+/// number (`12`) or key (`MW-12`, any case) is looked up in the graph. 404 when there is no
+/// such number, or the key's prefix is not the graph's key.
+pub async fn resolve_task_ref(
+    graph: &mut AsyncGraph,
+    graph_id: &str,
+    task_ref: &str,
+) -> Result<String> {
+    let (key, number) = match crate::numbering::parse_ref(task_ref) {
+        crate::numbering::TaskRef::Id(id) => return Ok(id.to_string()),
+        crate::numbering::TaskRef::Number { key, number } => (key, number),
+    };
+    let result = graph
+        .query(
+            "MATCH (t:Task)-[:PART_OF]->(g:Graph {id: $graph_id}) \
+             WHERE t.number = $number \
+             RETURN t.id AS id, g.key AS key",
+        )
+        .with_param("graph_id", graph_id)
+        .with_param("number", number)
+        .execute()
+        .await
+        .map_err(db_err)?;
+    if let Some(row) = collect_rows(result).await?.first() {
+        let graph_key: Option<String> = row.try_get("key").map_err(db_err)?;
+        if key.is_none() || key == graph_key {
+            return row.try_get("id").map_err(db_err);
+        }
+    }
+    Err(AppError::NotFound(format!(
+        "Task {} not found in graph {}",
+        task_ref, graph_id
+    )))
 }
 
 pub async fn ensure_graph(graph: &mut AsyncGraph, graph_id: &str) -> Result<()> {
@@ -176,8 +233,15 @@ fn row_to_task(row: &Row, graph_id: &str) -> Result<Task> {
             .ok_or_else(|| AppError::Internal(format!("Bad priority '{}' in DB", p)))?,
         None => Priority::default(),
     };
+    let number: Option<i64> = row.try_get("number").map_err(db_err)?;
+    let graph_key: Option<String> = row.try_get("graph_key").map_err(db_err)?;
     Ok(Task {
         id: row.try_get("id").map_err(db_err)?,
+        number,
+        key: match (&graph_key, number) {
+            (Some(k), Some(n)) if !k.is_empty() => Some(crate::numbering::format_key(k, n)),
+            _ => None,
+        },
         name: row.try_get("name").map_err(db_err)?,
         description: row
             .try_get::<Option<String>>("description")
@@ -223,7 +287,8 @@ const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
      OPTIONAL MATCH (t)-[:ASSIGNED_TO]->(u:Actor) \
      OPTIONAL MATCH (t)-[:REPORTED_BY]->(r:Actor) \
      OPTIONAL MATCH (t)-[:CREATED_BY]->(cb:Actor) \
-     RETURN t.id AS id, t.name AS name, t.description AS description, \
+     RETURN t.id AS id, t.number AS number, g.key AS graph_key, \
+            t.name AS name, t.description AS description, \
             t.status AS status, t.tags AS tags, \
             t.priority AS priority, t.pr_url AS pr_url, \
             t.created_at AS created_at, t.updated_at AS updated_at, \
@@ -236,7 +301,7 @@ const TASK_RETURN: &str = "OPTIONAL MATCH (t)-[:DEPENDS_ON]->(dep:Task) \
 
 pub async fn get_all_tasks(graph: &mut AsyncGraph, graph_id: &str) -> Result<Vec<Task>> {
     let q = format!(
-        "MATCH (t:Task)-[:PART_OF]->(:Graph {{id: $graph_id}}) {}",
+        "MATCH (t:Task)-[:PART_OF]->(g:Graph {{id: $graph_id}}) {}",
         TASK_RETURN
     );
     let result = graph
@@ -254,7 +319,7 @@ pub async fn get_all_tasks(graph: &mut AsyncGraph, graph_id: &str) -> Result<Vec
 
 pub async fn get_task(graph: &mut AsyncGraph, graph_id: &str, task_id: &str) -> Result<Task> {
     let q = format!(
-        "MATCH (t:Task {{id: $task_id}})-[:PART_OF]->(:Graph {{id: $graph_id}}) {}",
+        "MATCH (t:Task {{id: $task_id}})-[:PART_OF]->(g:Graph {{id: $graph_id}}) {}",
         TASK_RETURN
     );
     let result = graph
@@ -273,6 +338,8 @@ pub async fn get_task(graph: &mut AsyncGraph, graph_id: &str, task_id: &str) -> 
     }
 }
 
+/// Creates the task with the graph's next number: the counter is bumped and read in the same
+/// query, so concurrent creates never share a number.
 pub async fn create_task(
     graph: &mut AsyncGraph,
     graph_id: &str,
@@ -282,7 +349,9 @@ pub async fn create_task(
     graph
         .query(
             "MATCH (g:Graph {id: $graph_id}) \
-             CREATE (:Task {id: $id, name: $name, description: $description, \
+             WITH g, coalesce(g.task_seq, 0) + 1 AS number \
+             SET g.task_seq = number \
+             CREATE (:Task {id: $id, number: number, name: $name, description: $description, \
                             status: $status, tags: $tags, \
                             priority: $priority, pr_url: $pr_url, \
                             created_at: timestamp(), updated_at: timestamp()})-[:PART_OF]->(g)",
@@ -1187,4 +1256,73 @@ pub async fn migrate_users_to_actors(graph: &mut AsyncGraph) -> Result<i64> {
         .await
         .map_err(db_err)?;
     Ok(users)
+}
+
+/// Gives graphs without a key one derived from their name ([`crate::numbering::default_key`]).
+/// Idempotent. Returns the number of graphs updated.
+pub async fn backfill_graph_keys(graph: &mut AsyncGraph) -> Result<usize> {
+    let result = graph
+        .query(
+            "MATCH (g:Graph) WHERE g.key IS NULL OR g.key = '' RETURN g.id AS id, g.name AS name",
+        )
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let rows = collect_rows(result).await?;
+    for row in &rows {
+        let id: String = row.try_get("id").map_err(db_err)?;
+        let name: Option<String> = row.try_get("name").map_err(db_err)?;
+        let key = crate::numbering::default_key(name.as_deref().unwrap_or_default());
+        graph
+            .query("MATCH (g:Graph {id: $id}) SET g.key = $key")
+            .with_param("id", id)
+            .with_param("key", key)
+            .execute()
+            .await
+            .map_err(db_err)?;
+    }
+    Ok(rows.len())
+}
+
+/// Numbers the tasks that have no number yet, per graph in creation order (`created_at`, older
+/// tasks without it first, then ID), continuing the graph's counter. Each graph's numbers and
+/// counter are written in one query, so an interrupted run leaves no duplicates and a rerun
+/// numbers only what is left. Returns the number of tasks numbered.
+pub async fn backfill_task_numbers(graph: &mut AsyncGraph) -> Result<usize> {
+    let result = graph
+        .query(
+            "MATCH (t:Task)-[:PART_OF]->(g:Graph) WHERE t.number IS NULL \
+             RETURN g.id AS graph_id, t.id AS id \
+             ORDER BY graph_id, coalesce(t.created_at, 0), id",
+        )
+        .execute()
+        .await
+        .map_err(db_err)?;
+    let mut by_graph: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for row in collect_rows(result).await? {
+        by_graph
+            .entry(row.try_get("graph_id").map_err(db_err)?)
+            .or_default()
+            .push(row.try_get("id").map_err(db_err)?);
+    }
+    let mut numbered = 0;
+    for (graph_id, ids) in by_graph {
+        numbered += ids.len();
+        graph
+            .query(
+                "MATCH (g:Graph {id: $graph_id}) \
+                 WITH g, coalesce(g.task_seq, 0) AS base \
+                 SET g.task_seq = base + size($ids) \
+                 WITH base \
+                 UNWIND range(0, size($ids) - 1) AS i \
+                 MATCH (t:Task {id: $ids[i]}) \
+                 SET t.number = base + i + 1",
+            )
+            .with_param("graph_id", graph_id)
+            .with_param("ids", ids)
+            .execute()
+            .await
+            .map_err(db_err)?;
+    }
+    Ok(numbered)
 }

@@ -22,6 +22,7 @@ mod db;
 pub mod error;
 pub mod events;
 pub mod frontier;
+pub mod numbering;
 pub mod schemas;
 
 use error::{AppError, Result};
@@ -120,14 +121,18 @@ async fn create_graph(
             .map_err(|e| AppError::BadRequest(format!("Invalid graph body: {}", e)))?
     };
     let name = new_graph.name.trim().to_string();
+    let key = match new_graph.key.as_deref() {
+        Some(key) => parse_graph_key(key)?,
+        None => numbering::default_key(&name),
+    };
     let id = Uuid::new_v4().to_string();
     info!("Creating new graph with ID: {}", id);
     let mut graph = state.graph.clone();
-    db::create_graph(&mut graph, &id, &name).await?;
+    db::create_graph(&mut graph, &id, &name, &key).await?;
     if let Some(actor) = &caller.0 {
         db::set_created_by(&mut graph, db::Created::Graph, &id, &actor.id).await?;
     }
-    Ok(Json(CreateGraphResponse { id, name }))
+    Ok(Json(CreateGraphResponse { id, name, key }))
 }
 
 async fn list_graphs(State(state): State<AppState>) -> Result<Json<Vec<GraphInfo>>> {
@@ -154,12 +159,27 @@ async fn edit_graph(
             "Graph name cannot be empty".to_string(),
         ));
     }
+    let key = update.key.as_deref().map(parse_graph_key).transpose()?;
     let mut graph = state.graph.clone();
     db::ensure_graph(&mut graph, &graph_id).await?;
     if let Some(name) = &update.name {
         db::rename_graph(&mut graph, &graph_id, name.trim()).await?;
     }
+    if let Some(key) = &key {
+        db::set_graph_key(&mut graph, &graph_id, key).await?;
+    }
     Ok(Json(db::get_graph(&mut graph, &graph_id).await?))
+}
+
+/// A graph key from a request, normalized (`mw` -> `MW`); 400 if it is not one.
+fn parse_graph_key(key: &str) -> Result<String> {
+    numbering::normalize_key(key).ok_or_else(|| {
+        AppError::BadRequest(format!(
+            "Graph key must be 1-{} letters and digits starting with a letter, got '{}'",
+            numbering::MAX_KEY_LEN,
+            key
+        ))
+    })
 }
 
 /// The actor the request's bearer token belongs to; 401 without a token.
@@ -427,19 +447,20 @@ async fn get_ready_tasks(
 
 async fn get_task(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
 ) -> Result<Json<Task>> {
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     Ok(Json(db::get_task(&mut graph, &graph_id, &task_id).await?))
 }
 
 async fn edit_task(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
     Extension(caller): Extension<auth::Caller>,
     Json(update): Json<TaskUpdate>,
 ) -> Result<Json<Task>> {
-    info!("Editing task '{}' in graph '{}'", task_id, graph_id);
+    info!("Editing task '{}' in graph '{}'", task_ref, graph_id);
     if matches!(&update.name, Some(name) if name.trim().is_empty()) {
         return Err(AppError::BadRequest(
             "Task name cannot be empty".to_string(),
@@ -450,6 +471,7 @@ async fn edit_task(
     }
 
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     let before = db::get_task(&mut graph, &graph_id, &task_id).await?;
     if let Some(deps) = &update.depends_on {
         if deps.contains(&task_id) {
@@ -510,9 +532,10 @@ fn actor_id(caller: &auth::Caller) -> Option<&str> {
 
 async fn list_events(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
 ) -> Result<Json<Vec<Event>>> {
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     db::get_task(&mut graph, &graph_id, &task_id).await?;
     Ok(Json(db::list_events(&mut graph, &task_id).await?))
 }
@@ -542,13 +565,14 @@ fn validate_pr_url(pr_url: &str) -> Result<()> {
 /// when the task cannot be claimed (someone was faster, it is blocked, not `TODO`).
 async fn claim_task(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
     Extension(caller): Extension<auth::Caller>,
 ) -> Result<Json<Task>> {
     let actor = caller
         .0
         .ok_or_else(|| AppError::Unauthorized("Claiming needs a bearer token".to_string()))?;
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     let before = db::get_task(&mut graph, &graph_id, &task_id).await?;
     if db::claim_task(&mut graph, &graph_id, &task_id, &actor.id).await? {
         info!("Task '{}' claimed by '{}'", task_id, actor.name);
@@ -636,9 +660,10 @@ const MAX_COMMENT_CHARS: usize = 20_000;
 
 async fn list_comments(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
 ) -> Result<Json<Vec<Comment>>> {
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     db::get_task(&mut graph, &graph_id, &task_id).await?;
     Ok(Json(db::list_comments(&mut graph, &task_id).await?))
 }
@@ -646,7 +671,7 @@ async fn list_comments(
 /// Adds a comment by the caller: 401 without a token, since a comment's author is an actor.
 async fn add_comment(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
     Extension(caller): Extension<auth::Caller>,
     Json(comment): Json<NewComment>,
 ) -> Result<(StatusCode, Json<Comment>)> {
@@ -664,6 +689,7 @@ async fn add_comment(
         )));
     }
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     db::get_task(&mut graph, &graph_id, &task_id).await?;
     let id = Uuid::new_v4().to_string();
     db::add_comment(&mut graph, &task_id, &id, body, &author.id).await?;
@@ -677,10 +703,11 @@ async fn add_comment(
 
 async fn delete_task(
     State(state): State<AppState>,
-    Path((graph_id, task_id)): Path<(String, String)>,
+    Path((graph_id, task_ref)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>> {
-    info!("Deleting task '{}' from graph '{}'", task_id, graph_id);
+    info!("Deleting task '{}' from graph '{}'", task_ref, graph_id);
     let mut graph = state.graph.clone();
+    let task_id = db::resolve_task_ref(&mut graph, &graph_id, &task_ref).await?;
     db::get_task(&mut graph, &graph_id, &task_id).await?;
     db::delete_task(&mut graph, &task_id).await?;
     db::touch_graph(&mut graph, &graph_id).await?;

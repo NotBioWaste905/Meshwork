@@ -29,6 +29,13 @@ pub enum Priority {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Task {
     pub id: String,
+    /// The task's number in its graph (1, 2, ...); route paths accept it in place of the ID.
+    #[serde(default)]
+    pub number: Option<i64>,
+    /// Human-readable key, e.g. `MW-12`: the graph's key and the number. Use it in branch
+    /// names, commits and when talking about the task; routes accept it too.
+    #[serde(default)]
+    pub key: Option<String>,
     pub name: String,
     pub description: String,
     /// IDs of the tasks blocking this one.
@@ -64,6 +71,9 @@ pub struct GraphInfo {
     pub id: String,
     /// The graph's goal; empty for graphs created before graphs had names.
     pub name: String,
+    /// Prefix of the graph's task keys, e.g. `MW` in `MW-12`.
+    #[serde(default)]
+    pub key: String,
     pub task_count: i64,
     pub done_count: i64,
     pub blocked_count: i64,

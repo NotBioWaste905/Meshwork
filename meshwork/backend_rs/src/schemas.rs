@@ -74,6 +74,14 @@ pub struct LayoutUpdate {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Task {
     pub id: String,
+    /// The task's number in its graph, from the graph's counter: 1, 2, ... in creation order,
+    /// never reused. `None` only for a task an older backend created after the migration ran.
+    #[serde(default)]
+    pub number: Option<i64>,
+    /// The graph's key and the number, e.g. `MW-12`; task routes accept it (or the bare
+    /// number) in place of the ID. `None` when `number` is.
+    #[serde(default)]
+    pub key: Option<String>,
     pub name: String,
     pub description: String,
     /// IDs of the tasks this one depends on, i.e. the tasks blocking it.
@@ -164,12 +172,17 @@ pub struct NewGraph {
     /// The goal the graph leads to; empty when not given.
     #[serde(default)]
     pub name: String,
+    /// Prefix of the graph's task keys (`MW` in `MW-12`); derived from the name when omitted.
+    #[serde(default)]
+    pub key: Option<String>,
 }
 
 /// Request body for editing a graph. Omitted fields are left unchanged.
 #[derive(Deserialize, Debug, Default)]
 pub struct GraphUpdate {
     pub name: Option<String>,
+    /// New prefix for the task keys; existing tasks keep their numbers.
+    pub key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -177,6 +190,7 @@ pub struct CreateGraphResponse {
     #[serde(rename = "ID")]
     pub id: String,
     pub name: String,
+    pub key: String,
 }
 
 /// Graph metadata with task counters, as returned by `GET /v0/graphs` and `GET /v0/:graph`.
@@ -185,6 +199,9 @@ pub struct GraphInfo {
     pub id: String,
     /// Empty for graphs created before graphs had names.
     pub name: String,
+    /// Prefix of the graph's task keys, e.g. `MW`: 1-10 uppercase letters and digits.
+    #[serde(default)]
+    pub key: String,
     pub task_count: i64,
     pub done_count: i64,
     pub blocked_count: i64,
