@@ -292,6 +292,8 @@ pub struct TokenInfo {
     pub label: String,
     /// Milliseconds since the epoch.
     pub created_at: i64,
+    /// When the token stops working, ms since the epoch; `null` = until revoked.
+    pub expires_at: Option<i64>,
     pub actor_id: String,
     pub actor_name: String,
 }
@@ -311,6 +313,9 @@ pub struct NewToken {
     /// What the token is for, e.g. "laptop browser"; may be empty.
     #[serde(default)]
     pub label: String,
+    /// Lifetime in days, 1 to 3650; omitted = until revoked.
+    #[serde(default)]
+    pub expires_in_days: Option<u32>,
 }
 
 /// A newly issued token: the only time the token itself is shown.

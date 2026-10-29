@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import OwnTokens from '$lib/components/OwnTokens.svelte';
 	import { session } from '$lib/session.svelte';
@@ -13,7 +15,11 @@
 		saving = true;
 		error = await session.signIn(token);
 		saving = false;
-		if (!error) token = '';
+		if (error) return;
+		token = '';
+		// back to the screen that sent us here; only paths inside the app
+		const next = page.url.searchParams.get('next');
+		if (next?.startsWith('/') && !next.startsWith('//')) goto(next, { replaceState: true });
 	}
 </script>
 
@@ -52,7 +58,11 @@
 	{:else}
 		{#if session.expired}
 			<div class="bg-st-blocked-bg text-danger rounded-lg p-3 text-sm" role="alert">
-				The saved token no longer works (revoked?), so you were signed out.
+				The saved token no longer works (revoked or expired?), so you were signed out.
+			</div>
+		{:else if session.signInRequired}
+			<div class="bg-st-progress-bg rounded-lg p-3 text-sm" role="status">
+				This Meshwork needs you to sign in: paste your actor token below.
 			</div>
 		{/if}
 		<form class="card flex flex-col gap-4 p-6" onsubmit={signIn}>
@@ -77,10 +87,12 @@
 				>
 			</div>
 			<p class="text-muted m-0 text-sm leading-relaxed">
-				Tokens are issued on the server, for an existing actor:
-				<code>scripts/mcp-token.sh &lt;your name&gt; ~/meshwork.token</code>
-				or <code>docker compose exec -T backend meshwork-token create &lt;your name&gt;</code>. The
-				token stays in this browser only.
+				Tokens are issued on the server:
+				<code
+					>docker compose exec -T backend meshwork-token create &lt;your name&gt; --kind human</code
+				>
+				(<code>--kind</code> creates the actor if it does not exist yet). The token stays in this browser
+				only.
 			</p>
 		</form>
 	{/if}

@@ -7,6 +7,10 @@
 //!
 //! `FALKORDB_URL` defaults to `falkor://localhost:6379`. Each test works in its
 //! own throwaway FalkorDB graph, deleted at the end.
+//!
+//! `TestApp::new()` runs in the compatibility mode (`MESHWORK_ALLOW_ANONYMOUS=true`), so tests
+//! about the domain can call without a token and check what an anonymous request does;
+//! `TestApp::strict()` is the default deployment, every `/v0/` request needing a token.
 
 use axum::{
     body::Body,
@@ -38,7 +42,16 @@ impl TestApp {
         Self::with_url(&falkordb_url()).await
     }
 
+    /// Tokens required, as deployed by default.
+    async fn strict() -> Self {
+        Self::build(&falkordb_url(), false).await
+    }
+
     async fn with_url(uri: &str) -> Self {
+        Self::build(uri, true).await
+    }
+
+    async fn build(uri: &str, allow_anonymous: bool) -> Self {
         let client = connection::connect(uri)
             .await
             .expect("FalkorDB is not reachable");
@@ -48,6 +61,7 @@ impl TestApp {
             .expect("cannot create indexes");
         let state = AppState {
             graph: graph.clone(),
+            allow_anonymous,
         };
         TestApp {
             router: app(state, cors_layer("http://localhost:3000")),
@@ -1015,7 +1029,8 @@ async fn bearer_tokens_identify_actors() {
     let (status, _) = app.call(Method::GET, "/v0/me", None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    // Requests without a token are still served; a bad token is refused everywhere.
+    // In the compatibility mode requests without a token are still served; a bad token is
+    // refused everywhere.
     assert_eq!(
         app.call(Method::GET, "/v0/graphs", None).await.0,
         StatusCode::OK
@@ -1090,6 +1105,144 @@ async fn bearer_tokens_identify_actors() {
     assert_eq!(
         auth::list_tokens(&mut app.graph, None).await.unwrap().len(),
         1
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "needs FalkorDB"]
+async fn tokens_required_by_default() {
+    let mut app = TestApp::strict().await;
+    // The first actor and its token come from the CLI side: there is no way in over HTTP.
+    let (ann, created) = auth::ensure_actor(&mut app.graph, "ann", ActorKind::Human)
+        .await
+        .unwrap();
+    assert!(created);
+    let (again, created) = auth::ensure_actor(&mut app.graph, &ann.id, ActorKind::Agent)
+        .await
+        .unwrap();
+    assert_eq!(
+        (again.id.as_str(), again.kind, created),
+        (ann.id.as_str(), ActorKind::Human, false)
+    );
+    let (token, token_id, _) = auth::issue_token(&mut app.graph, "ann", "").await.unwrap();
+
+    // Without a token every /v0/ endpoint is a 401 that says what to send.
+    let graph_id = {
+        let (status, body) = app
+            .call_as(Some(&token), Method::POST, "/v0/create_graph", None)
+            .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        body["ID"].as_str().unwrap().to_string()
+    };
+    for (method, uri) in [
+        (Method::GET, "/v0/graphs".to_string()),
+        (Method::POST, "/v0/create_graph".to_string()),
+        (Method::GET, "/v0/actors".to_string()),
+        (Method::GET, format!("/v0/{graph_id}")),
+        (Method::GET, format!("/v0/{graph_id}/all_tasks")),
+        (Method::GET, "/v0/me".to_string()),
+    ] {
+        let (status, body) = app.call(method.clone(), &uri, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {uri}");
+        assert_eq!(body["message"], auth::NO_TOKEN);
+    }
+    // Liveness stays open, and so does the CORS preflight the browser sends without a token.
+    assert_eq!(
+        app.call(Method::GET, "/health", None).await.0,
+        StatusCode::OK
+    );
+    let preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/v0/graphs")
+        .header(header::ORIGIN, "http://localhost:3000")
+        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+        .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "authorization")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.router.clone().oneshot(preflight).await.unwrap();
+    assert!(response.status().is_success(), "{}", response.status());
+
+    // With a token: served, and the work is signed.
+    let (status, body) = app
+        .call_as(
+            Some(&token),
+            Method::POST,
+            &format!("/v0/{graph_id}/task/add/"),
+            Some(json!({ "name": "A" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["reporter"], json!(ann.id));
+
+    // Tokens can expire: a lifetime in days, checked on every request.
+    for bad in [0, auth::MAX_TOKEN_DAYS + 1] {
+        let (status, _) = app
+            .call_as(
+                Some(&token),
+                Method::POST,
+                "/v0/me/tokens",
+                Some(json!({ "expires_in_days": bad })),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    let (status, issued) = app
+        .call_as(
+            Some(&token),
+            Method::POST,
+            "/v0/me/tokens",
+            Some(json!({ "label": "short", "expires_in_days": 1 })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{issued}");
+    let short = issued["token"].as_str().unwrap().to_string();
+    let expires_at = issued["info"]["expires_at"].as_i64().unwrap();
+    let day = 24 * 60 * 60 * 1000;
+    assert!((expires_at - issued["info"]["created_at"].as_i64().unwrap() - day).abs() < 1000);
+    assert_eq!(
+        app.call_as(Some(&short), Method::GET, "/v0/me", None)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let (_, own) = app
+        .call_as(Some(&token), Method::GET, "/v0/me/tokens", None)
+        .await;
+    let lifetimes: Vec<&Value> = own
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| &t["expires_at"])
+        .collect();
+    assert!(lifetimes.contains(&&Value::Null) && lifetimes.contains(&&json!(expires_at)));
+    app.graph
+        .query("MATCH (k:Token {id: $id}) SET k.expires_at = 1")
+        .with_param("id", issued["info"]["id"].as_str().unwrap())
+        .execute()
+        .await
+        .unwrap();
+    let (status, body) = app.call_as(Some(&short), Method::GET, "/v0/me", None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(
+        body["message"].as_str().unwrap().contains("expired"),
+        "{body}"
+    );
+    let (status, _) = app
+        .call_as(
+            Some(&token),
+            Method::DELETE,
+            &format!("/v0/me/tokens/{token_id}"),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        app.call_as(Some(&token), Method::GET, "/v0/graphs", None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
     );
 
     app.cleanup().await;

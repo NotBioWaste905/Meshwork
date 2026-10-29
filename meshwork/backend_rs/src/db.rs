@@ -980,20 +980,24 @@ pub async fn merge_actor(graph: &mut AsyncGraph, from: &str, into: &str) -> Resu
     delete_actor(graph, from).await
 }
 
-/// Stores an API token as `(:Token {id, hash, label, created_at})-[:OF]->(:Actor)`. Only the
-/// hash is stored; the token itself is shown once, by whoever issued it.
+/// Stores an API token as `(:Token {id, hash, label, created_at, expires_at})-[:OF]->(:Actor)`.
+/// Only the hash is stored; the token itself is shown once, by whoever issued it. `expires_at`
+/// is `ttl_ms` after now, absent (never expires) without one.
 pub async fn create_token(
     graph: &mut AsyncGraph,
     token_id: &str,
     hash: &str,
     actor_id: &str,
     label: &str,
+    ttl_ms: Option<i64>,
 ) -> Result<()> {
     graph
         .query(
             "MATCH (a:Actor {id: $actor}) \
-             CREATE (:Token {id: $id, hash: $hash, label: $label, created_at: timestamp()})-[:OF]->(a)",
+             CREATE (:Token {id: $id, hash: $hash, label: $label, created_at: timestamp(), \
+                             expires_at: timestamp() + $ttl})-[:OF]->(a)",
         )
+        .with_param("ttl", ttl_ms)
         .with_param("actor", actor_id)
         .with_param("id", token_id)
         .with_param("hash", hash)
@@ -1004,10 +1008,11 @@ pub async fn create_token(
     Ok(())
 }
 
-/// The actor a token hash belongs to, if the token exists.
+/// The actor a token hash belongs to, if the token exists and has not expired.
 pub async fn actor_by_token_hash(graph: &mut AsyncGraph, hash: &str) -> Result<Option<Actor>> {
     let q = format!(
-        "MATCH (:Token {{hash: $hash}})-[:OF]->(a:Actor) {}",
+        "MATCH (k:Token {{hash: $hash}})-[:OF]->(a:Actor) \
+         WHERE k.expires_at IS NULL OR k.expires_at > timestamp() {}",
         ACTOR_RETURN
     );
     let result = graph
@@ -1043,7 +1048,7 @@ pub async fn list_tokens(graph: &mut AsyncGraph, actor_id: Option<&str>) -> Resu
     let q = format!(
         "MATCH (k:Token)-[:OF]->(a:Actor) {} \
          RETURN k.id AS id, k.label AS label, k.created_at AS created_at, \
-                a.id AS actor_id, a.name AS actor_name \
+                k.expires_at AS expires_at, a.id AS actor_id, a.name AS actor_name \
          ORDER BY toLower(actor_name), created_at",
         if actor_id.is_some() {
             "WHERE a.id = $actor"
@@ -1064,6 +1069,7 @@ pub async fn list_tokens(graph: &mut AsyncGraph, actor_id: Option<&str>) -> Resu
                 id: row.try_get("id").map_err(db_err)?,
                 label: row.try_get("label").map_err(db_err)?,
                 created_at: row.try_get("created_at").map_err(db_err)?,
+                expires_at: row.try_get("expires_at").map_err(db_err)?,
                 actor_id: row.try_get("actor_id").map_err(db_err)?,
                 actor_name: row.try_get("actor_name").map_err(db_err)?,
             })

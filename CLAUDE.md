@@ -63,7 +63,8 @@ npm run format
 ```
 
 Backend env: `FALKORDB_URL` (default `falkor://falkordb:6379`), `FALKORDB_GRAPH` (default
-`meshwork`), `CORS_ALLOW_ORIGINS` (comma-separated or `*`, default
+`meshwork`), `MESHWORK_ALLOW_ANONYMOUS` (default `false`: every `/v0/` request needs a token;
+`true` serves requests without one as nobody, local dev only), `CORS_ALLOW_ORIGINS` (comma-separated or `*`, default
 `http://localhost:3000,http://localhost:5173`), `PORT` (default `8000`). All user graphs live in one FalkorDB graph,
 told apart by a `(:Graph {id})` node; tests use a throwaway FalkorDB graph `test_<uuid>`.
 
@@ -83,16 +84,21 @@ in both `compose.yaml` and `ci.yml` — keep them equal.
 (:Task)-[:DEPENDS_ON]->(:Task)      # task depends on dep
 (:Task)-[:ASSIGNED_TO]->(:Actor {id, name, kind})   # kind: human | agent
 (:Task)-[:REPORTED_BY]->(:Actor)    # at most one: who asked for the task and checks the result
-(:Token {id, hash, label, created_at})-[:OF]->(:Actor)  # hash = SHA-256 of the token
+(:Token {id, hash, label, created_at, expires_at?})-[:OF]->(:Actor)  # hash = SHA-256; no expires_at = until revoked
 (:Comment {id, body, created_at})-[:ON]->(:Task), (:Comment)-[:BY]->(:Actor)  # body is Markdown
 (:Event {id, kind, field, from, to, at, seq})-[:ON]->(:Task), (:Event)-[:BY]->(:Actor)  # change log
 ```
 
-**Auth.** Every `/v0/` request may carry `Authorization: Bearer mw_…`, an actor token; the
-backend resolves it to the calling actor (`auth::Caller` in the request extensions). No token →
-served as nobody (requiring one is the "Harden MCP and API token security" task); an unknown
-or malformed token → 401. A first token is issued only by the `meshwork-token` CLI (`create <actor>
-[--label …]`, `list [actor]`, `revoke <id>`), never over HTTP; only hashes are stored. Over HTTP
+**Auth.** Every `/v0/` request needs `Authorization: Bearer mw_…`, an actor token; the
+backend resolves it to the calling actor (`auth::Caller` in the request extensions, always
+`Some` unless `MESHWORK_ALLOW_ANONYMOUS=true`, the compat mode where no token → served as
+nobody). No token, or an unknown, revoked, expired or malformed one → 401; `/` and `/health`
+stay open. A first token is issued only by the `meshwork-token` CLI (`create <actor> [--kind
+human|agent] [--expires-in <days>] [--label …]`, `--kind` creates a missing actor; `list
+[actor]`, `revoke <id>`), never over HTTP; only hashes are stored, looked up by an index (no
+secret comparison in Rust, so constant-time compare is moot). The web UI sends the token pasted on
+/me; any 401 sends it there (`session.signInRequired`). Integration tests: `TestApp::new()` is
+the compat mode, `TestApp::strict()` the default. Over HTTP
 an actor manages only its own tokens (`/v0/me/tokens`, token required), so nobody gets an
 identity they do not already hold. Merging
 actors moves their tokens, deleting an actor deletes them. The MCP server keeps no tokens: it
@@ -136,8 +142,8 @@ API (`/v0/...`):
   the token's actor (none without a token); on update `""` removes it. Merging actors moves it,
   deleting the actor removes it.
 - `GET me` — the actor of the request's token, 401 without one
-- `GET me/tokens` — the caller's tokens (`TokenInfo` + `current`: the one in use); `POST
-  me/tokens` with `{label?}` → 201 `{token, info}`, the token shown once; `DELETE
+- `GET me/tokens` — the caller's tokens (`TokenInfo` + `current`: the one in use; `expires_at`
+  ms or `null`); `POST me/tokens` with `{label?, expires_in_days?}` (1–3650) → 201 `{token, info}`, the token shown once; `DELETE
   me/tokens/:id` revokes one of the caller's tokens (anyone else's → 404). All 401 without a token.
 - `GET actors` (by name), `POST actors` with `{name, kind?}` → 201 `Actor` (409 if the name is
   taken, 400 if blank); `GET|PUT actors/:id` (partial `{name?, kind?}`). `Actor` carries

@@ -5,6 +5,9 @@ services:
     environment:
       - FALKORDB_URL=falkor://falkordb:6379
       - CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 # UI in compose, npm run dev
+      # Every /v0/ request needs an actor token (sign in on /me, see docs/operations.md);
+      # true serves requests without one as nobody: local development only.
+      - MESHWORK_ALLOW_ANONYMOUS=false
     ports:
       - "8000:8000"
     depends_on:

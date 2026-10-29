@@ -35,6 +35,9 @@ use schemas::{
 #[derive(Clone)]
 pub struct AppState {
     pub graph: AsyncGraph,
+    /// Serve `/v0/` requests without a token, as nobody (`MESHWORK_ALLOW_ANONYMOUS=true`).
+    /// Off by default: every request needs an actor token.
+    pub allow_anonymous: bool,
 }
 
 /// Builds the CORS layer from a comma-separated list of origins, or `*`.
@@ -226,7 +229,8 @@ async fn issue_own_token(
         )));
     }
     let mut graph = state.graph.clone();
-    let (token, id, _) = auth::issue_token(&mut graph, &actor.id, label).await?;
+    let (token, id, _) =
+        auth::issue_expiring_token(&mut graph, &actor.id, label, request.expires_in_days).await?;
     info!("Actor '{}' issued themselves token {}", actor.name, id);
     let info = db::list_tokens(&mut graph, Some(&actor.id))
         .await?

@@ -1,6 +1,6 @@
 use backend_rs::{app, connection, cors_layer, AppState};
 use std::net::SocketAddr;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() {
@@ -40,7 +40,33 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let state = AppState { graph };
+    let allow_anonymous = match std::env::var("MESHWORK_ALLOW_ANONYMOUS") {
+        Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" => true,
+            "" | "false" | "0" | "no" => false,
+            other => {
+                error!(
+                    "MESHWORK_ALLOW_ANONYMOUS must be true or false, got '{}'",
+                    other
+                );
+                std::process::exit(1);
+            }
+        },
+        Err(_) => false,
+    };
+    if allow_anonymous {
+        warn!(
+            "MESHWORK_ALLOW_ANONYMOUS=true: /v0/ requests without a token are served as nobody. \
+             For local development only."
+        );
+    } else {
+        info!("Every /v0/ request needs an actor token (MESHWORK_ALLOW_ANONYMOUS is off)");
+    }
+
+    let state = AppState {
+        graph,
+        allow_anonymous,
+    };
     info!("CORS allowed origins: {}", cors_origins);
     let app = app(state, cors_layer(&cors_origins));
 
